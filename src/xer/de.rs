@@ -1,7 +1,10 @@
 //! # Decoding XER
 extern crate alloc;
 
-use xml_no_std::{common::XmlVersion, reader::XmlEvent, ParserConfig};
+use core::borrow::Borrow;
+
+use chrono::format::parse;
+use xml_no_std::{attribute::Attribute, common::XmlVersion, reader::XmlEvent, ParserConfig};
 
 use crate::{
     error::*,
@@ -286,7 +289,63 @@ impl crate::Decoder for Decoder {
     }
 
     fn decode_any(&mut self) -> Result<crate::types::Any, Self::Error> {
-        todo!()
+        tag!(StartElement, self)?;
+        let mut events = self
+            .stack
+            .pop()
+            .ok_or_else(|| error!(EndOfXmlInput))?
+            .events;
+        events.pop_back();
+        let mut xml_writer = xml_no_std::EmitterConfig::new()
+            .write_document_declaration(false)
+            .create_writer();
+
+        for reader_event in events {
+            match reader_event {
+                XmlEvent::EndDocument => return Err(XerDecodeErrorKind::EndOfXmlInput {}.into()),
+                XmlEvent::StartElement {
+                    name,
+                    mut attributes,
+                    namespace,
+                } => {
+                    let event = xml_no_std::writer::XmlEvent::StartElement {
+                        name: name.borrow(),
+                        namespace: namespace.borrow(),
+                        attributes: attributes
+                            .iter_mut()
+                            .map(|attr| Attribute::new(attr.name.borrow(), &attr.value))
+                            .collect(),
+                    };
+                    xml_writer
+                        .write(event)
+                        .map_err(|e| XerDecodeErrorKind::InvalidOpenType { inner_err: e })?;
+                }
+                XmlEvent::Characters(text) => {
+                    let text = text.borrow();
+                    let event = xml_no_std::writer::XmlEvent::Characters(text);
+                    xml_writer
+                        .write(event)
+                        .map_err(|e| XerDecodeErrorKind::InvalidOpenType { inner_err: e })?;
+                }
+                XmlEvent::Comment(text) => {
+                    let text = text.borrow();
+                    let event = xml_no_std::writer::XmlEvent::Comment(text);
+                    xml_writer
+                        .write(event)
+                        .map_err(|e| XerDecodeErrorKind::InvalidOpenType { inner_err: e })?;
+                }
+                other => {
+                    if let Some(writer_event) = other.as_writer_event() {
+                        xml_writer
+                            .write(writer_event)
+                            .map_err(|e| XerDecodeErrorKind::InvalidOpenType { inner_err: e })?;
+                    }
+                }
+            }
+        }
+        Ok(Any {
+            contents: xml_writer.into_inner().into_bytes(),
+        })
     }
 
     fn decode_bit_string(
@@ -334,8 +393,7 @@ impl crate::Decoder for Decoder {
         tag!(StartElement, self)?;
         let value = match self.next_element() {
             Some(XmlEvent::StartElement { name, .. }) => {
-                if let Some(e) = E::from_identifier(&name.local_name)
-                {
+                if let Some(e) = E::from_identifier(&name.local_name) {
                     tag!(EndElement, self).map(|_| e)
                 } else {
                     Err(DecodeError::from(XerDecodeErrorKind::XmlTypeMismatch {
@@ -443,7 +501,15 @@ impl crate::Decoder for Decoder {
         _tag: Tag,
         _constraints: Constraints,
     ) -> Result<alloc::vec::Vec<u8>, Self::Error> {
-        todo!()
+        tag!(StartElement, self)?;
+        let value = value_or_empty!(
+            self,
+            BIT_STRING_TYPE_TAG,
+            parse_octetstring_value,
+            "hexadecimal characters"
+        );
+        tag!(EndElement, self)?;
+        value
     }
 
     fn decode_utf8_string(
@@ -624,9 +690,7 @@ impl crate::Decoder for Decoder {
                 let tag = D::IDENTIFIERS
                     .iter()
                     .enumerate()
-                    .find(|(_, id)| 
-                        id.eq_ignore_ascii_case(&name.local_name)
-                    )
+                    .find(|(_, id)| id.eq_ignore_ascii_case(&name.local_name))
                     .and_then(|(i, _)| {
                         variants::Variants::from_slice(
                             &[D::VARIANTS, D::EXTENDED_VARIANTS.unwrap_or(&[])].concat(),
@@ -704,6 +768,14 @@ fn parse_bitstring_value(val: &str) -> Result<BitString, DecodeError> {
     Ok(BitString::from_iter(val.chars().filter_map(|c| {
         (c == '1').then_some(true).or((c == '0').then_some(false))
     })))
+}
+
+fn parse_octetstring_value(val: &str) -> Result<alloc::vec::Vec<u8>, DecodeError> {
+    (0..val.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&val[i..i + 2], 16))
+        .collect::<Result<alloc::vec::Vec<_>, _>>()
+        .map_err(|e| XerDecodeErrorKind::InvalidXerOctetstring { parse_int_err: e }.into())
 }
 
 fn decode_sequence_or_set_items<D: Decode>(
@@ -1137,16 +1209,33 @@ mod tests {
 
     #[test]
     fn optional_absent() {
-        let mut decoder = Decoder::new(
-            "<TestTypeA><grappa>1010</grappa></TestTypeA>".as_bytes(),
-        )
-        .unwrap();
+        let mut decoder =
+            Decoder::new("<TestTypeA><grappa>1010</grappa></TestTypeA>".as_bytes()).unwrap();
         assert_eq!(
             OptionalTest::decode(&mut decoder).unwrap(),
             OptionalTest {
                 wine: None,
                 grappa: bitvec::bitvec![u8, bitvec::prelude::Msb0; 1, 0, 1, 0]
             }
+        )
+    }
+
+    #[derive(AsnType, Debug, Decode, PartialEq)]
+    #[rasn(automatic_tags)]
+    #[rasn(crate_root = "crate")]
+    struct AnyTest {
+        grappa: Any,
+    }
+
+    #[test]
+    fn decodes_any() {
+        let mut decoder = Decoder::new(
+            "<AnyTest><grappa><Actual><Hello>7</Hello><Text>Text</Text></Actual></grappa></AnyTest>".as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(
+            "<Actual><Hello>7</Hello><Text>Text</Text></Actual>".as_bytes(),
+            AnyTest::decode(&mut decoder).unwrap().grappa.contents
         )
     }
 }

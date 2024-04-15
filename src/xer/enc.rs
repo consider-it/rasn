@@ -1,16 +1,12 @@
 //! # Encoding XER.
 
-use crate::{
-    error::{EncodeError, XerEncodeErrorKind},
-};
+use crate::error::{EncodeError, XerEncodeErrorKind};
 
-pub struct Encoder {
-}
+pub struct Encoder {}
 
 impl Encoder {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 
     pub fn finish(self) -> alloc::vec::Vec<u8> {
@@ -27,7 +23,11 @@ impl crate::Encoder for Encoder {
         todo!()
     }
 
-    fn encode_any(&mut self, tag: crate::Tag, value: &crate::types::Any) -> Result<Self::Ok, Self::Error> {
+    fn encode_any(
+        &mut self,
+        tag: crate::Tag,
+        value: &crate::types::Any,
+    ) -> Result<Self::Ok, Self::Error> {
         todo!()
     }
 
@@ -185,7 +185,8 @@ impl crate::Encoder for Encoder {
     ) -> Result<Self::Ok, Self::Error>
     where
         C: crate::types::Constructed,
-        F: FnOnce(&mut Self) -> Result<(), Self::Error> {
+        F: FnOnce(&mut Self) -> Result<(), Self::Error>,
+    {
         todo!()
     }
 
@@ -201,7 +202,8 @@ impl crate::Encoder for Encoder {
     fn encode_set<C, F>(&mut self, tag: crate::Tag, value: F) -> Result<Self::Ok, Self::Error>
     where
         C: crate::types::Constructed,
-        F: FnOnce(&mut Self) -> Result<(), Self::Error> {
+        F: FnOnce(&mut Self) -> Result<(), Self::Error>,
+    {
         todo!()
     }
 
@@ -258,7 +260,8 @@ impl crate::Encoder for Encoder {
         value: Option<&E>,
     ) -> Result<Self::Ok, Self::Error>
     where
-        E: crate::Encode + crate::types::Constructed {
+        E: crate::Encode + crate::types::Constructed,
+    {
         todo!()
     }
 }

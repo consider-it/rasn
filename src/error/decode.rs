@@ -1,6 +1,7 @@
 use core::num::ParseIntError;
 
 use super::strings::PermittedAlphabetError;
+use alloc::borrow::Cow;
 use alloc::{boxed::Box, string::ToString};
 
 use jzon::JsonValue;
@@ -568,6 +569,12 @@ pub enum XerDecodeErrorKind {
     XmlTypeMismatch {
         needed: &'static str,
         found: alloc::string::String,
+    },
+    #[snafu(display("Found invalid character in octet string."))]
+    InvalidXerOctetstring { parse_int_err: ParseIntError },
+    #[snafu(display("Found invalid open type encoding: {inner_err}"))]
+    InvalidOpenType {
+        inner_err: xml_no_std::writer::Error,
     },
     #[snafu(display("XML parser error: {details}"))]
     XmlParser { details: alloc::string::String },

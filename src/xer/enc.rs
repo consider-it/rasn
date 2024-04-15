@@ -13,7 +13,7 @@ impl Encoder {
         }
     }
 
-    pub fn finish(self) -> Vec<u8> {
+    pub fn finish(self) -> alloc::vec::Vec<u8> {
         todo!()
     }
 }
@@ -239,7 +239,6 @@ impl crate::Encoder for Encoder {
         &mut self,
         constraints: crate::types::Constraints,
         tag: crate::Tag,
-        identifier: &'static str,
         encode_fn: impl FnOnce(&mut Self) -> Result<crate::Tag, Self::Error>,
     ) -> Result<Self::Ok, Self::Error> {
         todo!()

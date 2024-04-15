@@ -23,7 +23,6 @@ pub enum CodecDecodeError {
     Uper(UperDecodeErrorKind),
     Aper(AperDecodeErrorKind),
     Jer(JerDecodeErrorKind),
-    #[cfg(feature = "xer")]
     Xer(XerDecodeErrorKind),
 }
 
@@ -44,7 +43,6 @@ impl_from!(Der, DerDecodeErrorKind);
 impl_from!(Uper, UperDecodeErrorKind);
 impl_from!(Aper, AperDecodeErrorKind);
 impl_from!(Jer, JerDecodeErrorKind);
-#[cfg(feature = "xer")]
 impl_from!(Xer, XerDecodeErrorKind);
 
 impl From<CodecDecodeError> for DecodeError {
@@ -310,8 +308,7 @@ impl DecodeError {
             CodecDecodeError::Uper(_) => crate::Codec::Uper,
             CodecDecodeError::Aper(_) => crate::Codec::Aper,
             CodecDecodeError::Jer(_) => crate::Codec::Jer,
-            #[cfg(feature = "xer")]
-            CodecDecodeError:: Xer(_) => crate::Codec:: Xer,
+            CodecDecodeError::Xer(_) => crate::Codec::Xer,
         };
         Self {
             kind: Box::new(DecodeErrorKind::CodecSpecific { inner }),
@@ -557,7 +554,6 @@ pub enum DerDecodeErrorKind {
 }
 
 /// An error that occurred when decoding XER.
-#[cfg(feature = "xer")]
 #[derive(Snafu, Debug)]
 #[snafu(visibility(pub))]
 #[non_exhaustive]
@@ -574,9 +570,14 @@ pub enum XerDecodeErrorKind {
         found: alloc::string::String,
     },
     #[snafu(display("XML parser error: {details}"))]
-    XmlParser { details: String },
+    XmlParser { details: alloc::string::String },
+    #[snafu(display("Error matching tag names: expected {needed}, found {found}"))]
+    XmlTag {
+        needed: alloc::string::String,
+        found: alloc::string::String,
+    },
     #[snafu(display("Encoding violates ITU-T X.693 (02/2021): {details}"))]
-    SpecViolation { details: String },
+    SpecViolation { details: alloc::string::String },
 }
 
 /// An error that occurred when decoding JER.

@@ -49,7 +49,6 @@ pub mod cer;
 pub mod der;
 pub mod error;
 pub mod jer;
-#[cfg(feature = "xer")]
 pub mod xer;
 mod num;
 pub mod uper;

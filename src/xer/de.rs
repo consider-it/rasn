@@ -3,7 +3,6 @@ extern crate alloc;
 
 use core::borrow::Borrow;
 
-use chrono::format::parse;
 use xml_no_std::{attribute::Attribute, common::XmlVersion, reader::XmlEvent, ParserConfig};
 
 use crate::{
@@ -100,7 +99,7 @@ macro_rules! decode_time {
 }
 
 macro_rules! value_or_empty {
-    ($this:ident, $tag:expr, $parser:ident, $expected:expr) => {{
+    ($this:ident, $parser:ident, $expected:expr) => {{
         let value = match $this.peek() {
             Some(XmlEvent::Characters(s)) => $parser(s),
             Some(XmlEvent::EndElement { .. }) => return Ok(<_>::default()),
@@ -305,14 +304,14 @@ impl crate::Decoder for Decoder {
                 XmlEvent::EndDocument => return Err(XerDecodeErrorKind::EndOfXmlInput {}.into()),
                 XmlEvent::StartElement {
                     name,
-                    mut attributes,
+                    attributes,
                     namespace,
                 } => {
                     let event = xml_no_std::writer::XmlEvent::StartElement {
                         name: name.borrow(),
                         namespace: namespace.borrow(),
                         attributes: attributes
-                            .iter_mut()
+                            .iter()
                             .map(|attr| Attribute::new(attr.name.borrow(), &attr.value))
                             .collect(),
                     };
@@ -354,12 +353,7 @@ impl crate::Decoder for Decoder {
         __constraints: Constraints,
     ) -> Result<crate::types::BitString, Self::Error> {
         tag!(StartElement, self)?;
-        let value = value_or_empty!(
-            self,
-            BIT_STRING_TYPE_TAG,
-            parse_bitstring_value,
-            "`1` or `0`"
-        );
+        let value = value_or_empty!(self, parse_bitstring_value, "`1` or `0`");
         tag!(EndElement, self)?;
         value
     }
@@ -512,12 +506,7 @@ impl crate::Decoder for Decoder {
         _constraints: Constraints,
     ) -> Result<alloc::vec::Vec<u8>, Self::Error> {
         tag!(StartElement, self)?;
-        let value = value_or_empty!(
-            self,
-            BIT_STRING_TYPE_TAG,
-            parse_octetstring_value,
-            "hexadecimal characters"
-        );
+        let value = value_or_empty!(self, parse_octetstring_value, "hexadecimal characters");
         tag!(EndElement, self)?;
         value
     }

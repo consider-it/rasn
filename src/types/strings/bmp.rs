@@ -1,6 +1,9 @@
 use super::*;
 
-use crate::error::strings::InvalidBmpString;
+use crate::error::{
+    strings::{InvalidBmpString, PermittedAlphabetError},
+    EncodeError,
+};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use once_cell::race::OnceBox;
 

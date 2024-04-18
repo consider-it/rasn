@@ -281,6 +281,8 @@ pub enum JerEncodeErrorKind {
 pub enum XerEncodeErrorKind {
     /// Upstream `xml` error
     XmlEncodingError { upstream: alloc::string::String },
+    #[snafu(display("Failed to retrieve field name."))]
+    FieldName,
 }
 
 /// `EncodeError` kinds of `Kind::CodecSpecific` which are specific for UPER.

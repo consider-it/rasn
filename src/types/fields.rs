@@ -1,3 +1,5 @@
+use core::{iter::Rev, slice::Iter};
+
 use alloc::borrow::Cow;
 
 use crate::types::{Tag, TagTree};
@@ -57,6 +59,10 @@ impl Fields {
 
     pub fn iter(&self) -> impl Iterator<Item = Field> + '_ {
         self.fields.iter().cloned()
+    }
+
+    pub fn reverse_iter(&self) -> Rev<Iter<Field>> {
+        self.fields.iter().rev()
     }
 
     pub fn identifiers(&self) -> impl Iterator<Item = &str> + '_ {

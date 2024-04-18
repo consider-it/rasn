@@ -572,6 +572,8 @@ pub enum XerDecodeErrorKind {
     },
     #[snafu(display("Found invalid character in octet string."))]
     InvalidXerOctetstring { parse_int_err: ParseIntError },
+    #[snafu(display("Encountered invalid value. {details}"))]
+    InvalidInput { details: &'static str },
     #[snafu(display("Found invalid open type encoding: {inner_err}"))]
     InvalidOpenType {
         inner_err: xml_no_std::writer::Error,

@@ -449,7 +449,17 @@ impl crate::Decoder for Decoder {
         &mut self,
         _tag: Tag,
     ) -> Result<crate::types::ObjectIdentifier, Self::Error> {
-        todo!()
+        tag!(StartElement, self)?;
+        let value = match self.next_element() {
+            Some(XmlEvent::Characters(value)) => parse_object_identifier(&value),
+            Some(elem) => Err(DecodeError::from(XerDecodeErrorKind::XmlTypeMismatch {
+                needed: "'.'-separated numeric object identifier arcs",
+                found: alloc::format!("{elem:?}"),
+            })),
+            None => Err(error!(EndOfXmlInput)),
+        };
+        tag!(EndElement, self)?;
+        value
     }
 
     fn decode_sequence<D, DF, F>(
@@ -726,7 +736,7 @@ impl crate::Decoder for Decoder {
         &mut self,
         _constraints: Constraints,
     ) -> Result<Option<D>, Self::Error> {
-        todo!()
+        self.decode_optional()
     }
 
     fn decode_optional_with_tag_and_constraints<D: Decode>(
@@ -734,7 +744,7 @@ impl crate::Decoder for Decoder {
         _tag: Tag,
         _constraints: Constraints,
     ) -> Result<Option<D>, Self::Error> {
-        todo!()
+        self.decode_optional()
     }
 
     fn decode_extension_addition_with_constraints<D>(
@@ -744,13 +754,13 @@ impl crate::Decoder for Decoder {
     where
         D: Decode,
     {
-        todo!()
+        self.decode_optional()
     }
 
     fn decode_extension_addition_group<D: Decode + crate::types::Constructed>(
         &mut self,
     ) -> Result<Option<D>, Self::Error> {
-        todo!()
+        self.decode_optional()
     }
 }
 
@@ -776,6 +786,29 @@ fn parse_octetstring_value(val: &str) -> Result<alloc::vec::Vec<u8>, DecodeError
         .map(|i| u8::from_str_radix(&val[i..i + 2], 16))
         .collect::<Result<alloc::vec::Vec<_>, _>>()
         .map_err(|e| XerDecodeErrorKind::InvalidXerOctetstring { parse_int_err: e }.into())
+}
+
+fn parse_object_identifier(val: &str) -> Result<ObjectIdentifier, DecodeError> {
+    let arcs = val
+        .split('.')
+        .try_fold(alloc::vec::Vec::<u32>::new(), |mut acc, curr| {
+            curr.parse()
+                .map(|i| {
+                    acc.push(i);
+                    acc
+                })
+                .map_err(|_| {
+                    DecodeError::from(XerDecodeErrorKind::InvalidInput {
+                        details: "Invalid Object Identifier value.",
+                    })
+                })
+        })?;
+    ObjectIdentifier::new(arcs).ok_or_else(|| {
+        XerDecodeErrorKind::InvalidInput {
+            details: "Invalid Object Identifier value.",
+        }
+        .into()
+    })
 }
 
 fn decode_sequence_or_set_items<D: Decode>(
@@ -1236,6 +1269,16 @@ mod tests {
         assert_eq!(
             "<Actual><Hello>7</Hello><Text>Text</Text></Actual>".as_bytes(),
             AnyTest::decode(&mut decoder).unwrap().grappa.contents
+        )
+    }
+
+    #[test]
+    fn decodes_object_identifier() {
+        let mut decoder =
+            Decoder::new("<OBJECT_IDENTIFIER>1.0.8571.2.1</OBJECT_IDENTIFIER>".as_bytes()).unwrap();
+        assert_eq!(
+            ObjectIdentifier::decode(&mut decoder).unwrap(),
+            ObjectIdentifier::new(&[1, 0, 8571, 2, 1]).unwrap()
         )
     }
 }

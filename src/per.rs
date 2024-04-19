@@ -28,7 +28,7 @@ pub(crate) fn encode<T: crate::Encode>(
 ) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     let mut enc = crate::per::enc::Encoder::new(options);
 
-    value.encode(&mut enc)?;
+    value.encode(&mut enc, T::IDENTIFIER)?;
 
     Ok(enc.output())
 }
@@ -53,7 +53,7 @@ pub(crate) fn encode_with_constraints<T: crate::Encode>(
 ) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     let mut enc = crate::per::enc::Encoder::new(options);
 
-    value.encode_with_constraints(&mut enc, constraints)?;
+    value.encode_with_constraints(&mut enc, constraints, T::IDENTIFIER)?;
 
     Ok(enc.output())
 }

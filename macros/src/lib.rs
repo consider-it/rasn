@@ -89,8 +89,9 @@ pub fn encode_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
                     encoder: &mut E,
                     tag: #crate_root::Tag,
                     _: #crate_root::prelude::Constraints,
+                    identifier: Option<&'static str>
                 ) -> Result<(), E::Error> {
-                    encoder.encode_null(tag).map(drop)
+                    encoder.encode_null(tag, Self::IDENTIFIER).map(drop)
                 }
             }
         },

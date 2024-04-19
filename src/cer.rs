@@ -14,7 +14,7 @@ pub fn encode<T: crate::Encode>(
 ) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     let mut enc = crate::ber::enc::Encoder::new(crate::ber::enc::EncoderOptions::cer());
 
-    value.encode(&mut enc)?;
+    value.encode(&mut enc, T::IDENTIFIER)?;
 
     Ok(enc.output())
 }

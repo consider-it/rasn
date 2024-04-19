@@ -69,7 +69,7 @@ pub type GeneralizedTime = chrono::DateTime<chrono::FixedOffset>;
 /// #[rasn(delegate)]
 /// struct TestTypeB(pub SequenceOf<InnerTestTypeB>);
 /// ```
-pub type SequenceOf<T> = alloc::vec::Vec<T>;
+pub type SequenceOf<T: AsnType> = alloc::vec::Vec<T>;
 
 /// A trait representing any type that can represented in ASN.1.
 pub trait AsnType {
@@ -91,7 +91,7 @@ pub trait AsnType {
 }
 
 /// A `SET` or `SEQUENCE` value.
-pub trait Constructed {
+pub trait Constructed: AsnType {
     /// Fields contained in the "root component list".
     const FIELDS: self::fields::Fields;
     /// Fields contained in the list of extensions.
@@ -99,7 +99,7 @@ pub trait Constructed {
 }
 
 /// A `CHOICE` value.
-pub trait Choice: Sized {
+pub trait Choice: Sized + AsnType {
     /// Variants contained in the "root component list".
     const VARIANTS: &'static [TagTree];
     /// Variants contained in the list of extensions.
@@ -115,7 +115,7 @@ pub trait DecodeChoice: Choice + crate::Decode {
 }
 
 /// A `ENUMERATED` value.
-pub trait Enumerated: Sized + 'static + PartialEq + Copy + core::fmt::Debug {
+pub trait Enumerated: Sized + 'static + PartialEq + Copy + core::fmt::Debug + AsnType {
     /// Variants contained in the "root component list".
     const VARIANTS: &'static [Self];
     /// Variants contained in the list of extensions.

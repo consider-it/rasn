@@ -17,7 +17,12 @@ fn kerberos_flags_enc() {
     let bitstring = KerberosFlags::from_vec([0x40, 0x81, 0x00, 0x00].to_vec());
     let mut encoder = ber::enc::Encoder::new(ber::enc::EncoderOptions::ber());
     encoder
-        .encode_bit_string(Tag::new(Class::Universal, 3), <_>::default(), &bitstring)
+        .encode_bit_string(
+            Tag::new(Class::Universal, 3),
+            <_>::default(),
+            &bitstring,
+            None,
+        )
         .unwrap();
     assert_eq!(
         encoder.output(),

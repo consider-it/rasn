@@ -841,7 +841,7 @@ impl<'a> FieldConfig<'a> {
 
         let encode = if self.tag.is_some() || self.container_config.automatic_tags {
             if self.tag.as_ref().map_or(false, |tag| tag.is_explicit()) {
-                let encode = quote!(encoder.encode_explicit_prefix(#tag, &self.#field)?;);
+                let encode = quote!(encoder.encode_explicit_prefix(#tag, &self.#field, None)?;);
                 if self.is_option_type() {
                     quote! {
                         if #this #field.is_some() {
@@ -877,6 +877,7 @@ impl<'a> FieldConfig<'a> {
                                 #tag,
                                 <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
                                 &#this #field,
+                                None,
                                 #default_fn
                             )?;
                         )
@@ -887,14 +888,15 @@ impl<'a> FieldConfig<'a> {
                                 encoder,
                                 #tag,
                                 <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
+                                None,
                                 #default_fn
                             )?;
                         )
                     }
                     (false, true) => {
-                        quote!(encoder.encode_default_with_tag(#tag, &#this #field, #default_fn)?;)
+                        quote!(encoder.encode_default_with_tag(#tag, &#this #field, None, #default_fn)?;)
                     }
-                    (false, false) => quote!(#this #field.encode_with_tag(encoder, #tag)?;),
+                    (false, false) => quote!(#this #field.encode_with_tag(encoder, #tag, None)?;),
                 }
             }
         } else if self.extension_addition {
@@ -921,6 +923,7 @@ impl<'a> FieldConfig<'a> {
                         encoder.encode_default_with_constraints(
                             <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
                             &#this #field,
+                            None,
                             #default_fn
                         )?;
                     )
@@ -933,11 +936,12 @@ impl<'a> FieldConfig<'a> {
                         #this #field.encode_with_constraints(
                             encoder,
                             <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
+                            None
                         )?;
                     )
                 }
-                (false, true) => quote!(encoder.encode_default(&#this #field, #default_fn)?;),
-                (false, false) => quote!(#this #field.encode(encoder)?;),
+                (false, true) => quote!(encoder.encode_default(&#this #field, None, #default_fn)?;),
+                (false, false) => quote!(#this #field.encode(encoder, None)?;),
             }
         };
 
@@ -966,7 +970,7 @@ impl<'a> FieldConfig<'a> {
         );
 
         let or_else = quote!(.map_err(|error| #crate_root::de::Error::field_error(#ident, error.into(), decoder.codec()))?);
-        let default_fn = self.default_fn();
+        let default_fn: Option<proc_macro2::TokenStream> = self.default_fn();
 
         let tag = self.tag(context);
         let constraints = self.constraints.const_expr(crate_root);

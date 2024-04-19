@@ -23,7 +23,8 @@ pub fn derive_struct_impl(
 
         if let Some(tag) = config.tag.as_ref().filter(|tag| tag.is_explicit()) {
             let tag = tag.to_tokens(crate_root);
-            let encode = quote!(encoder.encode_explicit_prefix(#tag, &self.0).map(drop));
+            let encode =
+                quote!(encoder.encode_explicit_prefix(#tag, &self.0, identifier).map(drop));
             if config.option_type.is_option_type(ty) {
                 quote! {
                     if &self.0.is_some() {
@@ -37,14 +38,15 @@ pub fn derive_struct_impl(
             quote!(
                 match tag {
                     #crate_root::Tag::EOC => {
-                        self.0.encode(encoder)
+                        self.0.encode(encoder, None)
                     }
                     _ => {
                         <#ty as #crate_root::Encode>::encode_with_tag_and_constraints(
                             &self.0,
                             encoder,
                             tag,
-                            <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(constraints)
+                            <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(constraints),
+                            identifier
                         )
                     }
                 }
@@ -61,7 +63,7 @@ pub fn derive_struct_impl(
                 #(#list)*
 
                 Ok(())
-            }).map(drop)
+            }, Self::IDENTIFIER).map(drop)
         };
 
         if config.tag.as_ref().map_or(false, |tag| tag.is_explicit()) {
@@ -82,7 +84,7 @@ pub fn derive_struct_impl(
     quote! {
         #[allow(clippy::mutable_key_type)]
         impl #impl_generics  #crate_root::Encode for #name #ty_generics #where_clause {
-            fn encode_with_tag_and_constraints<'constraints, EN: #crate_root::Encoder>(&self, encoder: &mut EN, tag: #crate_root::Tag, constraints: #crate_root::types::Constraints<'constraints>) -> core::result::Result<(), EN::Error> {
+            fn encode_with_tag_and_constraints<'constraints, EN: #crate_root::Encoder>(&self, encoder: &mut EN, tag: #crate_root::Tag, constraints: #crate_root::types::Constraints<'constraints>, identifier: Option<&'static str>) -> core::result::Result<(), EN::Error> {
                 #(#vars)*
 
                 #encode_impl
@@ -156,9 +158,9 @@ pub fn map_to_inner_type(
 
     let tag = tag.to_tokens(crate_root);
     let inner_impl = if is_explicit {
-        quote!(encoder.encode_explicit_prefix(#tag, &inner).map(drop))
+        quote!(encoder.encode_explicit_prefix(#tag, &inner, None).map(drop))
     } else {
-        quote!(inner.encode_with_tag(encoder, #tag))
+        quote!(inner.encode_with_tag(encoder, #tag, None))
     };
 
     quote! {

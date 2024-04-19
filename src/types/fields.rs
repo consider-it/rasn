@@ -61,10 +61,6 @@ impl Fields {
         self.fields.iter().cloned()
     }
 
-    pub fn reverse_iter(&self) -> Rev<Iter<Field>> {
-        self.fields.iter().rev()
-    }
-
     pub fn identifiers(&self) -> impl Iterator<Item = &str> + '_ {
         self.fields.iter().map(|f| f.name)
     }

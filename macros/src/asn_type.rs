@@ -95,7 +95,10 @@ pub fn derive_struct_impl(
     let constraints_def = config.constraints.const_static_def(crate_root);
 
     let alt_identifier = config.identifier.as_ref().map_or(
-        quote!(),
+        {
+            let id = name.to_string();
+            quote!(const IDENTIFIER: Option<&'static str> = Some(#id);)
+        },
         |id| quote!(const IDENTIFIER: Option<&'static str> = Some(#id);),
     );
 

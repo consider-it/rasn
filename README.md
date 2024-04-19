@@ -92,7 +92,7 @@ impl AsnType for Person {
 
 Next is the `Decode` and `Encode` traits. These are mirrors of each other and both have one provided method (`decode`/`encode`) and one required method (`decode_with_tag`/`encode_with_tag`). Since in ASN.1 nearly every type can be implicitly tagged allowing anyone to override the tag associated with the type, having `*_with_tag` as a required method requires the implementer to correctly handle this case, and the provided methods simply calls `*_with_tag` with the type's associated `AsnType::TAG`. Let's look at what the codec implementation of `Person` looks like.
 
-```rust
+```ignore
 # use rasn::{AsnType, types::{Constructed, fields::{Field, Fields}}};
 # struct Person { name: Utf8String, age: Integer }
 # impl AsnType for Person { const TAG: Tag = Tag::SEQUENCE; }

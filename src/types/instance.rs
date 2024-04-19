@@ -1,5 +1,10 @@
+use num_traits::identities;
+
 use super::{AsnType, Class, Constraints, ObjectIdentifier, Tag};
-use crate::types::fields::{Field, FieldPresence, Fields};
+use crate::{
+    der::Identifier,
+    types::fields::{Field, FieldPresence, Fields},
+};
 
 /// An instance of a defined object class.
 #[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq, Hash)]
@@ -35,12 +40,18 @@ impl<T: crate::Encode> crate::Encode for InstanceOf<T> {
         encoder: &mut EN,
         tag: Tag,
         _: Constraints,
+        identifier: Option<&'static str>,
     ) -> core::result::Result<(), EN::Error> {
-        encoder.encode_sequence::<Self, _>(tag, |sequence| {
-            self.type_id.encode(sequence)?;
-            sequence.encode_explicit_prefix(Tag::new(Class::Context, 0), &self.value)?;
-            Ok(())
-        })?;
+        encoder.encode_sequence::<Self, _>(
+            tag,
+            |sequence| {
+                self.type_id
+                    .encode(sequence, ObjectIdentifier::IDENTIFIER)?;
+                sequence.encode_explicit_prefix(Tag::new(Class::Context, 0), &self.value, None)?;
+                Ok(())
+            },
+            identifier,
+        )?;
 
         Ok(())
     }

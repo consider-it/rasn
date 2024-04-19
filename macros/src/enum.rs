@@ -301,16 +301,16 @@ impl Enum {
         let crate_root = &self.config.crate_root;
         let operation = if self.config.enumerated {
             quote! {
-                encoder.encode_enumerated(tag, self).map(drop)
+                encoder.encode_enumerated(tag, self, Self::IDENTIFIER).map(drop)
             }
         } else {
             quote! {
-                encoder.encode_explicit_prefix(tag, self).map(drop)
+                encoder.encode_explicit_prefix(tag, self, Self::IDENTIFIER).map(drop)
             }
         };
 
         quote! {
-            fn encode_with_tag_and_constraints<'constraints, EN: #crate_root::Encoder>(&self, encoder: &mut EN, tag: #crate_root::Tag, constraints: #crate_root::types::Constraints<'constraints>) -> core::result::Result<(), EN::Error> {
+            fn encode_with_tag_and_constraints<'constraints, EN: #crate_root::Encoder>(&self, encoder: &mut EN, tag: #crate_root::Tag, constraints: #crate_root::types::Constraints<'constraints>, identifier: Option<&'static str>) -> core::result::Result<(), EN::Error> {
                 #operation
             }
         }
@@ -379,17 +379,17 @@ impl Enum {
                         .const_expr(&self.config.crate_root);
                     let variant_tag = variant_tag.to_tokens(crate_root);
                     let encode_operation = if variant_config.has_explicit_tag() {
-                        quote!(encoder.encode_explicit_prefix(#variant_tag, value))
+                        quote!(encoder.encode_explicit_prefix(#variant_tag, value, None))
                     } else if variant_config.tag.is_some() || self.config.automatic_tags {
                         if let Some(constraints) = constraints {
-                            quote!(#crate_root::Encode::encode_with_tag_and_constraints(value, encoder, #variant_tag, #constraints))
+                            quote!(#crate_root::Encode::encode_with_tag_and_constraints(value, encoder, #variant_tag, #constraints, None))
                         } else {
-                            quote!(#crate_root::Encode::encode_with_tag(value, encoder, #variant_tag))
+                            quote!(#crate_root::Encode::encode_with_tag(value, encoder, #variant_tag, None))
                         }
                     } else if let Some(constraints) = constraints {
-                            quote!(#crate_root::Encode::encode_with_constraints(value, encoder, #constraints))
+                            quote!(#crate_root::Encode::encode_with_constraints(value, encoder, #constraints, None))
                         } else {
-                            quote!(#crate_root::Encode::encode(value, encoder))
+                            quote!(#crate_root::Encode::encode(value, encoder, None))
                     };
 
                     quote! {
@@ -401,9 +401,9 @@ impl Enum {
                 syn::Fields::Unit => {
                     let variant_tag = variant_tag.to_tokens(crate_root);
                     let encode_operation = if variant_config.has_explicit_tag() {
-                        quote!(encoder.encode_explicit_prefix(#variant_tag, &()))
+                        quote!(encoder.encode_explicit_prefix(#variant_tag, &(), None))
                     } else {
-                        quote!(encoder.encode_null(#variant_tag))
+                        quote!(encoder.encode_null(#variant_tag, None))
                     };
 
                     quote!(#name::#ident => #encode_operation.map(|_| #variant_tag))
@@ -419,7 +419,8 @@ impl Enum {
                 },
                 |encoder| match self {
                     #(#variants),*
-                }
+                },
+                Self::IDENTIFIER
             )
         };
 
@@ -482,14 +483,14 @@ impl Enum {
                     #(#init_variants),*
                 };
 
-                encoder.encode_explicit_prefix::<#inner_name>(<#name as #crate_root::AsnType>::TAG, &value)
+                encoder.encode_explicit_prefix::<#inner_name>(<#name as #crate_root::AsnType>::TAG, &value, None)
             }
         } else {
             encode_variants
         };
 
         quote! {
-            fn encode<E: #crate_root::Encoder>(&self, encoder: &mut E) -> core::result::Result<(), E::Error> {
+            fn encode<E: #crate_root::Encoder>(&self, encoder: &mut E, identifier: Option<&'static str>) -> core::result::Result<(), E::Error> {
                 #encode_impl.map(drop)
             }
         }

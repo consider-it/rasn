@@ -24,7 +24,7 @@ const UTC_TIME_TYPE_TAG: &str = "UTCTime";
 /// Attempts to decode `T` from `input` using XER.
 /// # Errors
 /// Returns error specific to XER decoder if decoding is not possible.
-pub fn decode<'de, T: crate::Decode>(input: &'de [u8]) -> Result<T, crate::error::DecodeError> {
+pub fn decode<T: crate::Decode>(input: &[u8]) -> Result<T, crate::error::DecodeError> {
     T::decode(&mut de::Decoder::new(input)?)
 }
 
@@ -35,7 +35,7 @@ pub fn encode<T: crate::Encode>(
     value: &T,
 ) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     let mut encoder = enc::Encoder::new();
-    value.encode(&mut encoder)?;
+    value.encode(&mut encoder, T::IDENTIFIER)?;
     Ok(encoder.finish())
 }
 

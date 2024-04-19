@@ -328,6 +328,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &types::BitStr,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         if value.is_empty() {
             self.encode_primitive(tag, &[]);
@@ -350,7 +351,12 @@ impl crate::Encoder for Encoder {
         }
     }
 
-    fn encode_bool(&mut self, tag: Tag, value: bool) -> Result<Self::Ok, Self::Error> {
+    fn encode_bool(
+        &mut self,
+        tag: Tag,
+        value: bool,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error> {
         self.encode_primitive(tag, &[if value { 0xff } else { 0x00 }]);
         Ok(())
     }
@@ -360,6 +366,7 @@ impl crate::Encoder for Encoder {
         _: Constraints,
         _t: Tag,
         encode_fn: impl FnOnce(&mut Self) -> Result<Tag, Self::Error>,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         (encode_fn)(self).map(drop)
     }
@@ -368,9 +375,10 @@ impl crate::Encoder for Encoder {
         &mut self,
         tag: Tag,
         value: &E,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let value = E::discriminant(value);
-        self.encode_integer(tag, <_>::default(), &value.into())
+        self.encode_integer(tag, <_>::default(), &value.into(), None)
     }
 
     fn encode_integer(
@@ -378,17 +386,27 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &num_bigint::BigInt,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_primitive(tag, &value.to_signed_bytes_be());
         Ok(())
     }
 
-    fn encode_null(&mut self, tag: Tag) -> Result<Self::Ok, Self::Error> {
+    fn encode_null(
+        &mut self,
+        tag: Tag,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error> {
         self.encode_primitive(tag, &[]);
         Ok(())
     }
 
-    fn encode_object_identifier(&mut self, tag: Tag, oid: &[u32]) -> Result<Self::Ok, Self::Error> {
+    fn encode_object_identifier(
+        &mut self,
+        tag: Tag,
+        oid: &[u32],
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error> {
         let bytes = self.object_identifier_as_bytes(oid)?;
         self.encode_primitive(tag, &bytes);
         Ok(())
@@ -399,6 +417,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &[u8],
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value)
     }
@@ -408,6 +427,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &types::VisibleString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value.as_iso646_bytes())
     }
@@ -417,6 +437,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &types::Ia5String,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value.as_iso646_bytes())
     }
@@ -426,6 +447,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &types::GeneralString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value)
     }
@@ -435,6 +457,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &types::PrintableString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value.as_bytes())
     }
@@ -444,6 +467,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &types::NumericString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value.as_bytes())
     }
@@ -453,6 +477,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _: Constraints,
         value: &types::TeletexString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value)
     }
@@ -462,6 +487,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _constraints: Constraints,
         value: &types::BmpString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, &value.to_bytes())
     }
@@ -471,6 +497,7 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         _: Constraints,
         value: &str,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_octet_string_(tag, value.as_bytes())
     }
@@ -479,6 +506,7 @@ impl crate::Encoder for Encoder {
         &mut self,
         tag: Tag,
         value: &types::UtcTime,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_primitive(
             tag,
@@ -492,6 +520,7 @@ impl crate::Encoder for Encoder {
         &mut self,
         tag: Tag,
         value: &types::GeneralizedTime,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.encode_primitive(
             tag,
@@ -501,16 +530,21 @@ impl crate::Encoder for Encoder {
         Ok(())
     }
 
-    fn encode_some<E: Encode>(&mut self, value: &E) -> Result<Self::Ok, Self::Error> {
-        value.encode(self)
+    fn encode_some<E: Encode>(
+        &mut self,
+        value: &E,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error> {
+        value.encode(self, None)
     }
 
     fn encode_some_with_tag<E: Encode>(
         &mut self,
         tag: Tag,
         value: &E,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
-        value.encode_with_tag(self, tag)
+        value.encode_with_tag(self, tag, None)
     }
 
     fn encode_some_with_tag_and_constraints<E: Encode>(
@@ -518,8 +552,9 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         constraints: Constraints,
         value: &E,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
-        value.encode_with_tag_and_constraints(self, tag, constraints)
+        value.encode_with_tag_and_constraints(self, tag, constraints, None)
     }
 
     fn encode_none<E: Encode>(&mut self) -> Result<Self::Ok, Self::Error> {
@@ -535,11 +570,12 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         values: &[E],
         _constraints: Constraints,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let mut sequence_encoder = Self::new(self.config);
 
         for value in values {
-            value.encode(&mut sequence_encoder)?;
+            value.encode(&mut sequence_encoder, None)?;
         }
 
         self.encode_constructed(tag, &sequence_encoder.output);
@@ -552,12 +588,13 @@ impl crate::Encoder for Encoder {
         tag: Tag,
         values: &types::SetOf<E>,
         _constraints: Constraints,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let mut encoded_values = values
             .iter()
             .map(|val| {
                 let mut sequence_encoder = Self::new(self.config);
-                val.encode(&mut sequence_encoder)
+                val.encode(&mut sequence_encoder, None)
                     .map(|_| sequence_encoder.output)
             })
             .collect::<Result<Vec<Vec<u8>>, _>>()?;
@@ -576,14 +613,20 @@ impl crate::Encoder for Encoder {
         &mut self,
         tag: Tag,
         value: &V,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let mut encoder = Self::new(self.config);
-        value.encode(&mut encoder)?;
+        value.encode(&mut encoder, None)?;
         self.encode_constructed(tag, &encoder.output);
         Ok(())
     }
 
-    fn encode_sequence<C, F>(&mut self, tag: Tag, encoder_scope: F) -> Result<Self::Ok, Self::Error>
+    fn encode_sequence<C, F>(
+        &mut self,
+        tag: Tag,
+        encoder_scope: F,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error>
     where
         C: crate::types::Constructed,
         F: FnOnce(&mut Self) -> Result<Self::Ok, Self::Error>,
@@ -597,7 +640,12 @@ impl crate::Encoder for Encoder {
         Ok(())
     }
 
-    fn encode_set<C, F>(&mut self, tag: Tag, encoder_scope: F) -> Result<Self::Ok, Self::Error>
+    fn encode_set<C, F>(
+        &mut self,
+        tag: Tag,
+        encoder_scope: F,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error>
     where
         C: crate::types::Constructed,
         F: FnOnce(&mut Self) -> Result<Self::Ok, Self::Error>,
@@ -617,7 +665,7 @@ impl crate::Encoder for Encoder {
         constraints: Constraints,
         value: E,
     ) -> Result<Self::Ok, Self::Error> {
-        value.encode_with_tag_and_constraints(self, tag, constraints)
+        value.encode_with_tag_and_constraints(self, tag, constraints, None)
     }
 
     /// Encode a extension addition group value.
@@ -628,7 +676,7 @@ impl crate::Encoder for Encoder {
     where
         E: Encode + crate::types::Constructed,
     {
-        value.encode(self)
+        value.encode(self, None)
     }
 }
 
@@ -677,7 +725,7 @@ mod tests {
         fn oid_to_bytes(oid: &[u32]) -> Vec<u8> {
             use crate::Encoder;
             let mut enc = self::Encoder::new(EncoderOptions::ber());
-            enc.encode_object_identifier(Tag::OBJECT_IDENTIFIER, oid)
+            enc.encode_object_identifier(Tag::OBJECT_IDENTIFIER, oid, None)
                 .unwrap();
             enc.output
         }
@@ -778,6 +826,10 @@ mod tests {
 
         struct Set;
 
+        impl crate::types::AsnType for Set {
+            const TAG: Tag = Tag::SET;
+        }
+
         impl crate::types::Constructed for Set {
             const FIELDS: crate::types::fields::Fields =
                 crate::types::fields::Fields::from_static(&[
@@ -790,12 +842,16 @@ mod tests {
         let output = {
             let mut encoder = Encoder::new_set(EncoderOptions::ber());
             encoder
-                .encode_set::<Set, _>(Tag::SET, |encoder| {
-                    field3.encode(encoder)?;
-                    field2.encode(encoder)?;
-                    field1.encode(encoder)?;
-                    Ok(())
-                })
+                .encode_set::<Set, _>(
+                    Tag::SET,
+                    |encoder| {
+                        field3.encode(encoder, None)?;
+                        field2.encode(encoder, None)?;
+                        field1.encode(encoder, None)?;
+                        Ok(())
+                    },
+                    None,
+                )
                 .unwrap();
 
             encoder.output()

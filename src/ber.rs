@@ -23,7 +23,7 @@ pub fn encode<T: crate::Encode>(
 ) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     let mut enc = enc::Encoder::new(enc::EncoderOptions::ber());
 
-    value.encode(&mut enc)?;
+    value.encode(&mut enc, T::IDENTIFIER)?;
 
     Ok(enc.output())
 }
@@ -207,12 +207,17 @@ mod tests {
                 encoder: &mut EN,
                 tag: crate::Tag,
                 _: Constraints,
+                identifier: Option<&'static str>,
             ) -> Result<(), EN::Error> {
-                encoder.encode_set::<Self, _>(tag, |encoder| {
-                    self.age.encode(encoder)?;
-                    self.name.encode(encoder)?;
-                    Ok(())
-                })?;
+                encoder.encode_set::<Self, _>(
+                    tag,
+                    |encoder| {
+                        self.age.encode(encoder, u32::IDENTIFIER)?;
+                        self.name.encode(encoder, Utf8String::IDENTIFIER)?;
+                        Ok(())
+                    },
+                    identifier,
+                )?;
 
                 Ok(())
             }

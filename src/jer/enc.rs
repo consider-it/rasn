@@ -68,10 +68,15 @@ impl crate::Encoder for Encoder {
         t: crate::Tag,
         value: &crate::types::Any,
     ) -> Result<Self::Ok, Self::Error> {
-        self.encode_octet_string(t, <_>::default(), &value.contents)
+        self.encode_octet_string(t, <_>::default(), &value.contents, None)
     }
 
-    fn encode_bool(&mut self, _: crate::Tag, value: bool) -> Result<Self::Ok, Self::Error> {
+    fn encode_bool(
+        &mut self,
+        _: crate::Tag,
+        value: bool,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::Boolean(value))
     }
 
@@ -80,6 +85,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         constraints: crate::types::Constraints,
         value: &crate::types::BitStr,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let bytes = to_vec(value)
             .iter()
@@ -109,6 +115,7 @@ impl crate::Encoder for Encoder {
         &mut self,
         _: crate::Tag,
         value: &E,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(alloc::string::String::from(
             value.identifier(),
@@ -119,6 +126,7 @@ impl crate::Encoder for Encoder {
         &mut self,
         _t: crate::Tag,
         value: &[u32],
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             value
@@ -134,6 +142,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &num_bigint::BigInt,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let as_i64: i64 =
             value
@@ -144,7 +153,11 @@ impl crate::Encoder for Encoder {
         self.update_root_or_constructed(JsonValue::Number(as_i64.into()))
     }
 
-    fn encode_null(&mut self, _: crate::Tag) -> Result<Self::Ok, Self::Error> {
+    fn encode_null(
+        &mut self,
+        _: crate::Tag,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::Null)
     }
 
@@ -153,6 +166,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &[u8],
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(value.iter().fold(
             alloc::string::String::new(),
@@ -168,6 +182,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &crate::types::GeneralString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(value.to_vec())
@@ -180,6 +195,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &str,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(value.into()))
     }
@@ -189,6 +205,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &crate::types::VisibleString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(value.as_iso646_bytes().to_vec())
@@ -201,6 +218,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &crate::types::Ia5String,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(value.as_iso646_bytes().to_vec())
@@ -213,6 +231,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &crate::types::PrintableString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(value.as_bytes().to_vec())
@@ -225,6 +244,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &crate::types::NumericString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(value.as_bytes().to_vec())
@@ -237,6 +257,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         _value: &crate::types::TeletexString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         todo!()
     }
@@ -246,6 +267,7 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &crate::types::BmpString,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(value.to_bytes())
@@ -257,6 +279,7 @@ impl crate::Encoder for Encoder {
         &mut self,
         _t: crate::Tag,
         value: &crate::types::GeneralizedTime,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(
@@ -270,6 +293,7 @@ impl crate::Encoder for Encoder {
         &mut self,
         _t: crate::Tag,
         value: &crate::types::UtcTime,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::String(
             alloc::string::String::from_utf8(
@@ -283,14 +307,16 @@ impl crate::Encoder for Encoder {
         &mut self,
         _: crate::Tag,
         value: &V,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
-        value.encode(self)
+        value.encode(self, None)
     }
 
     fn encode_sequence<C, F>(
         &mut self,
         __t: crate::Tag,
         encoder_scope: F,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error>
     where
         C: crate::types::Constructed,
@@ -321,12 +347,13 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         value: &[E],
         _c: crate::types::Constraints,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::Array(value.iter().try_fold(
             alloc::vec![],
             |mut acc, v| {
                 let mut item_encoder = Self::new();
-                v.encode(&mut item_encoder).and(
+                v.encode(&mut item_encoder, None).and(
                     item_encoder
                         .root_value()
                         .map(|rv| acc.push(rv))
@@ -336,12 +363,17 @@ impl crate::Encoder for Encoder {
         )?))
     }
 
-    fn encode_set<C, F>(&mut self, tag: crate::Tag, value: F) -> Result<Self::Ok, Self::Error>
+    fn encode_set<C, F>(
+        &mut self,
+        tag: crate::Tag,
+        value: F,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error>
     where
         C: crate::types::Constructed,
         F: FnOnce(&mut Self) -> Result<(), Self::Error>,
     {
-        self.encode_sequence::<C, F>(tag, value)
+        self.encode_sequence::<C, F>(tag, value, None)
     }
 
     fn encode_set_of<E: crate::Encode>(
@@ -349,12 +381,13 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         value: &crate::types::SetOf<E>,
         _c: crate::types::Constraints,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         self.update_root_or_constructed(JsonValue::Array(value.iter().try_fold(
             alloc::vec![],
             |mut acc, v| {
                 let mut item_encoder = Self::new();
-                v.encode(&mut item_encoder).and(
+                v.encode(&mut item_encoder, None).and(
                     item_encoder
                         .root_value()
                         .map(|rv| acc.push(rv))
@@ -364,8 +397,12 @@ impl crate::Encoder for Encoder {
         )?))
     }
 
-    fn encode_some<E: crate::Encode>(&mut self, value: &E) -> Result<Self::Ok, Self::Error> {
-        value.encode(self)
+    fn encode_some<E: crate::Encode>(
+        &mut self,
+        value: &E,
+        _identifier: Option<&'static str>,
+    ) -> Result<Self::Ok, Self::Error> {
+        value.encode(self, None)
     }
 
     fn encode_some_with_tag_and_constraints<E: crate::Encode>(
@@ -373,8 +410,9 @@ impl crate::Encoder for Encoder {
         _t: crate::Tag,
         _c: crate::types::Constraints,
         value: &E,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
-        value.encode(self)
+        value.encode(self, None)
     }
 
     fn encode_none<E: crate::Encode>(&mut self) -> Result<Self::Ok, Self::Error> {
@@ -392,6 +430,7 @@ impl crate::Encoder for Encoder {
         _c: crate::types::Constraints,
         tag: crate::types::Tag,
         encode_fn: impl FnOnce(&mut Self) -> Result<crate::Tag, Self::Error>,
+        _identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let variants = variants::Variants::from_slice(
             &[E::VARIANTS, E::EXTENDED_VARIANTS.unwrap_or(&[])].concat(),
@@ -429,7 +468,7 @@ impl crate::Encoder for Encoder {
         _c: crate::types::Constraints,
         value: E,
     ) -> Result<Self::Ok, Self::Error> {
-        value.encode(self)
+        value.encode(self, None)
     }
 
     fn encode_extension_addition_group<E>(
@@ -440,7 +479,7 @@ impl crate::Encoder for Encoder {
         E: crate::Encode + crate::types::Constructed,
     {
         match value {
-            Some(v) => v.encode(self),
+            Some(v) => v.encode(self, None),
             None => self.encode_none::<E>(),
         }
     }

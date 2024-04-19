@@ -85,9 +85,10 @@ impl Encode for GeneralString {
         encoder: &mut E,
         tag: Tag,
         constraints: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), E::Error> {
         encoder
-            .encode_general_string(tag, constraints, self)
+            .encode_general_string(tag, constraints, self, identifier)
             .map(drop)
     }
 }

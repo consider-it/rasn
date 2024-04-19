@@ -292,6 +292,7 @@ pub mod interfaces {
             encoder: &mut EN,
             tag: Tag,
             constraints: Constraints,
+            _identifier: Option<&'static str>
         ) -> Result<(), EN::Error> {
             self.to_opaque()
                 .map_err(|e| {
@@ -300,7 +301,7 @@ pub mod interfaces {
                         encoder.codec(),
                     )
                 })?
-                .encode_with_tag_and_constraints(encoder, tag, constraints)
+                .encode_with_tag_and_constraints(encoder, tag, constraints, Entry::IDENTIFIER)
         }
     }
 

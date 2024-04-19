@@ -169,7 +169,7 @@ mod tests {
                 encoder: &mut E,
                 tag: Tag,
                 constraints: Constraints,
-                identifier: Option<&'static str>
+                identifier: Option<&'static str>,
             ) -> Result<(), E::Error> {
                 encoder
                     .encode_integer(tag, constraints, &self.0.into(), None)

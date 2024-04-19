@@ -22,11 +22,15 @@ fn extensions() {
             _i: Integer,
         }
 
-        encoder.encode_sequence::<Sequence, _>(Tag::SEQUENCE, |encoder| {
-            encoder.encode_bool(Tag::BOOL, true, None)?;
-            encoder.encode_integer(Tag::INTEGER, <_>::default(), &0u32.into(), None)?;
-            Ok(())
-        }, None)?;
+        encoder.encode_sequence::<Sequence, _>(
+            Tag::SEQUENCE,
+            |encoder| {
+                encoder.encode_bool(Tag::BOOL, true, None)?;
+                encoder.encode_integer(Tag::INTEGER, <_>::default(), &0u32.into(), None)?;
+                Ok(())
+            },
+            None,
+        )?;
 
         Ok(())
     })

@@ -137,7 +137,7 @@ pub struct Decoder {
 
 impl Decoder {
     pub fn new(input: &[u8]) -> Result<Self, <Decoder as crate::de::Decoder>::Error> {
-        let mut reader = ParserConfig::default().create_reader(input.into_iter());
+        let mut reader = ParserConfig::default().create_reader(input.iter());
         let next = reader.next().map_err(|e| error!(XmlParser, "{e:?}"))?;
         check_prolog(&next)?;
         let mut elements = alloc::collections::VecDeque::new();

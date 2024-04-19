@@ -1,8 +1,6 @@
-use num_traits::identities;
 
 use super::{AsnType, Class, Constraints, ObjectIdentifier, Tag};
 use crate::{
-    der::Identifier,
     types::fields::{Field, FieldPresence, Fields},
 };
 

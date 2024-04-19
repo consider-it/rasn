@@ -38,7 +38,7 @@ pub fn derive_struct_impl(
             quote!(
                 match tag {
                     #crate_root::Tag::EOC => {
-                        self.0.encode(encoder, None)
+                        self.0.encode(encoder, identifier)
                     }
                     _ => {
                         <#ty as #crate_root::Encode>::encode_with_tag_and_constraints(
@@ -63,7 +63,7 @@ pub fn derive_struct_impl(
                 #(#list)*
 
                 Ok(())
-            }, Self::IDENTIFIER).map(drop)
+            }, identifier.or(Self::IDENTIFIER)).map(drop)
         };
 
         if config.tag.as_ref().map_or(false, |tag| tag.is_explicit()) {

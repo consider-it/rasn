@@ -75,14 +75,14 @@ impl Encode for ExtUtcTime {
         encoder: &mut EN,
         tag: Tag,
         _: Constraints,
-        identifier: Option<&'static str>
+        identifier: Option<&'static str>,
     ) -> Result<(), EN::Error> {
         encoder
             .encode_octet_string(
                 tag,
                 <_>::from(&[constraints::Size::new(constraints::Bounded::single_value(13)).into()]),
                 self.0.format(FULL_DATE_FORMAT).to_string().as_bytes(),
-                ExtUtcTime::IDENTIFIER
+                ExtUtcTime::IDENTIFIER,
             )
             .map(drop)
     }

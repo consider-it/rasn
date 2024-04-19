@@ -144,7 +144,10 @@ impl Enum {
         });
 
         let alt_identifier = self.config.identifier.as_ref().map_or(
-            quote!(),
+            {
+                let id = name.to_string();
+                quote!(const IDENTIFIER: Option<&'static str> = Some(#id);)
+            },
             |id| quote!(const IDENTIFIER: Option<&'static str> = Some(#id);),
         );
 
@@ -301,11 +304,11 @@ impl Enum {
         let crate_root = &self.config.crate_root;
         let operation = if self.config.enumerated {
             quote! {
-                encoder.encode_enumerated(tag, self, Self::IDENTIFIER).map(drop)
+                encoder.encode_enumerated(tag, self, identifier.or(Self::IDENTIFIER)).map(drop)
             }
         } else {
             quote! {
-                encoder.encode_explicit_prefix(tag, self, Self::IDENTIFIER).map(drop)
+                encoder.encode_explicit_prefix(tag, self, identifier.or(Self::IDENTIFIER)).map(drop)
             }
         };
 
@@ -420,7 +423,7 @@ impl Enum {
                 |encoder| match self {
                     #(#variants),*
                 },
-                Self::IDENTIFIER
+                identifier.or(Self::IDENTIFIER)
             )
         };
 

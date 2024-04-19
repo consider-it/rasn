@@ -2,7 +2,7 @@
 use core::{
     borrow::Borrow,
     fmt::Write,
-    ops::{Deref, Not},
+    ops::{Deref},
 };
 
 use crate::{
@@ -20,7 +20,6 @@ use crate::{
         PRINTABLE_STRING_TYPE_TAG, UTC_TIME_TYPE_TAG, UTF8_STRING_TYPE_TAG,
         VISIBLE_STRING_TYPE_TAG,
     },
-    Tag,
 };
 use alloc::borrow::Cow;
 use num_bigint::BigInt;
@@ -155,7 +154,11 @@ impl crate::Encoder for Encoder {
     ) -> Result<Self::Ok, Self::Error> {
         wrap_in_tags!(
             self,
-            Cow::Borrowed(E::IDENTIFIER.ok_or_else(|| XerEncodeErrorKind::MissingIdentifier)?),
+            Cow::Borrowed(
+                identifier
+                    .or(E::IDENTIFIER)
+                    .ok_or(XerEncodeErrorKind::MissingIdentifier)?
+            ),
             write_enumerated,
             value
         )
@@ -421,7 +424,14 @@ impl crate::Encoder for Encoder {
         _constraints: crate::types::Constraints,
         identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
-        Ok(())
+        let xml_tag = self.field_tag_stack.pop().unwrap_or(Cow::Borrowed(
+            identifier.ok_or(XerEncodeErrorKind::MissingIdentifier)?,
+        ));
+        self.write_start_element(&xml_tag)?;
+        for elem in value {
+            elem.encode(self, E::IDENTIFIER)?;
+        }
+        self.write_end_element(xml_tag)
     }
 
     fn encode_set<C, F>(
@@ -434,7 +444,23 @@ impl crate::Encoder for Encoder {
         C: crate::types::Constructed,
         F: FnOnce(&mut Self) -> Result<(), Self::Error>,
     {
-        todo!()
+        let xml_tag = self.field_tag_stack.pop().unwrap_or(Cow::Borrowed(
+            identifier
+                .or(C::IDENTIFIER)
+                .ok_or(XerEncodeErrorKind::MissingIdentifier)?,
+        ));
+        self.write_start_element(&xml_tag)?;
+
+        let mut ids = C::FIELDS
+            .identifiers()
+            .chain(C::EXTENDED_FIELDS.unwrap_or(Fields::empty()).identifiers())
+            .map(|id| Cow::<str>::Owned(id.to_string()))
+            .collect::<Vec<_>>();
+        ids.reverse();
+        ids.into_iter().for_each(|id| self.field_tag_stack.push(id));
+        value(self)?;
+
+        self.write_end_element(xml_tag)
     }
 
     fn encode_set_of<E: crate::Encode>(
@@ -444,7 +470,14 @@ impl crate::Encoder for Encoder {
         _constraints: crate::types::Constraints,
         identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        let xml_tag = self.field_tag_stack.pop().unwrap_or(Cow::Borrowed(
+            identifier.ok_or(XerEncodeErrorKind::MissingIdentifier)?,
+        ));
+        self.write_start_element(&xml_tag)?;
+        for elem in value {
+            elem.encode(self, E::IDENTIFIER)?;
+        }
+        self.write_end_element(xml_tag)
     }
 
     fn encode_some<E: crate::Encode>(
@@ -483,7 +516,9 @@ impl crate::Encoder for Encoder {
         identifier: Option<&'static str>,
     ) -> Result<Self::Ok, Self::Error> {
         let xml_tag = self.field_tag_stack.pop().unwrap_or(Cow::Borrowed(
-            E::IDENTIFIER.ok_or(XerEncodeErrorKind::MissingIdentifier)?,
+            identifier
+                .or(E::IDENTIFIER)
+                .ok_or(XerEncodeErrorKind::MissingIdentifier)?,
         ));
         self.write_start_element(&xml_tag)?;
 
@@ -679,6 +714,9 @@ impl Encoder {
 
 #[cfg(test)]
 mod tests {
+    use bitvec::bitvec;
+    use bitvec::order::Msb0;
+
     use crate::prelude::*;
     use crate::xer::encode;
 
@@ -738,38 +776,146 @@ mod tests {
         )
     }
 
-    #[derive(AsnType, Debug, Encode, PartialEq)]
-    #[rasn(automatic_tags, delegate)]
-    #[rasn(crate_root = "crate")]
-    struct DelegateType(pub bool);
+    macro_rules! basic_types {
+        ($test_name:ident, $type:ident, $value:expr, $expected_ty:literal, $expected_val:literal) => {
+            #[test]
+            fn $test_name() {
+                #[derive(AsnType, Debug, Encode, PartialEq)]
+                #[rasn(automatic_tags, delegate)]
+                #[rasn(crate_root = "crate")]
+                struct DelegateType(pub $type);
 
-    #[derive(AsnType, Debug, Encode, PartialEq)]
-    #[rasn(automatic_tags, delegate)]
-    #[rasn(crate_root = "crate")]
-    struct NestedDelegateType(pub DelegateType);
+                #[derive(AsnType, Debug, Encode, PartialEq)]
+                #[rasn(automatic_tags, delegate)]
+                #[rasn(crate_root = "crate")]
+                struct NestedDelegateType(pub DelegateType);
 
-    #[derive(AsnType, Debug, Encode, PartialEq)]
-    #[rasn(automatic_tags, delegate, identifier = "Alias")]
-    #[rasn(crate_root = "crate")]
-    struct AliasDelegateType(pub bool);
+                #[derive(AsnType, Debug, Encode, PartialEq)]
+                #[rasn(automatic_tags, delegate, identifier = "Alias")]
+                #[rasn(crate_root = "crate")]
+                struct AliasDelegateType(pub $type);
 
-    #[test]
-    fn handles_identifiers() {
-        assert_eq!(
-            String::from_utf8(encode(&true).unwrap()).unwrap(),
-            "<BOOLEAN><true /></BOOLEAN>"
-        );
-        assert_eq!(
-            String::from_utf8(encode(&DelegateType(true)).unwrap()).unwrap(),
-            "<DelegateType><true /></DelegateType>"
-        );
-        assert_eq!(
-            String::from_utf8(encode(&NestedDelegateType(DelegateType(true))).unwrap()).unwrap(),
-            "<NestedDelegateType><true /></NestedDelegateType>"
-        );
-        assert_eq!(
-            String::from_utf8(encode(&AliasDelegateType(true)).unwrap()).unwrap(),
-            "<Alias><true /></Alias>"
-        );
+                assert_eq!(
+                    String::from_utf8(encode(&$value).unwrap()).unwrap(),
+                    String::from("<")
+                        + $expected_ty
+                        + ">"
+                        + $expected_val
+                        + "</"
+                        + $expected_ty
+                        + ">"
+                );
+                assert_eq!(
+                    String::from_utf8(encode(&DelegateType($value)).unwrap()).unwrap(),
+                    String::from("<DelegateType>") + $expected_val + "</DelegateType>"
+                );
+                assert_eq!(
+                    String::from_utf8(encode(&NestedDelegateType(DelegateType($value))).unwrap())
+                        .unwrap(),
+                    String::from("<NestedDelegateType>") + $expected_val + "</NestedDelegateType>"
+                );
+                assert_eq!(
+                    String::from_utf8(encode(&AliasDelegateType($value)).unwrap()).unwrap(),
+                    String::from("<Alias>") + $expected_val + "</Alias>"
+                );
+            }
+        };
     }
+
+    #[derive(AsnType, Debug, Encode, PartialEq, Copy, Clone)]
+    #[rasn(enumerated, automatic_tags)]
+    #[rasn(crate_root = "crate")]
+    enum EnumType {
+        #[rasn(identifier = "eins")]
+        First,
+        #[rasn(identifier = "zwei")]
+        Second,
+    }
+
+    #[derive(AsnType, Debug, Encode, PartialEq)]
+    #[rasn(choice, automatic_tags)]
+    #[rasn(crate_root = "crate")]
+    enum ChoiceType {
+        #[rasn(identifier = "enum")]
+        EnumVariant(EnumType),
+        nested(InnerTestA),
+    }
+
+    basic_types!(boolean_true, bool, true, "BOOLEAN", "<true />");
+    basic_types!(boolean_false, bool, false, "BOOLEAN", "<false />");
+    basic_types!(integer_sml, Integer, Integer::from(1), "INTEGER", "1");
+    basic_types!(integer_neg, Integer, Integer::from(-2), "INTEGER", "-2");
+    basic_types!(integer_u8, u8, 212, "INTEGER", "212");
+    basic_types!(
+        integer_i64,
+        i64,
+        -2141247653269i64,
+        "INTEGER",
+        "-2141247653269"
+    );
+    basic_types!(
+        bit_string,
+        BitString,
+        bitvec![u8, Msb0; 1,0,1,1,0,0,1],
+        "BIT_STRING",
+        "1011001"
+    );
+    basic_types!(
+        octet_string,
+        OctetString,
+        OctetString::from([255u8, 0, 8, 10].to_vec()),
+        "OCTET_STRING",
+        "FF00080A"
+    );
+    basic_types!(
+        ia5_string,
+        Ia5String,
+        Ia5String::from_iso646_bytes(&[0x30, 0x31, 0x32, 0x33, 0x34, 0x35]).unwrap(),
+        "IA5String",
+        "012345"
+    );
+    basic_types!(
+        numeric_string,
+        NumericString,
+        NumericString::from_bytes(&[0x30, 0x31, 0x32, 0x33, 0x34, 0x35]).unwrap(),
+        "NumericString",
+        "012345"
+    );
+    basic_types!(
+        utf8_string,
+        Utf8String,
+        "012345".to_string(),
+        "UTF8String",
+        "012345"
+    );
+    basic_types!(
+        object_identifier,
+        ObjectIdentifier,
+        ObjectIdentifier::from(Oid::const_new(&[1, 654, 2, 1])),
+        "OBJECT_IDENTIFIER",
+        "1.654.2.1"
+    );
+    basic_types!(
+        sequence,
+        InnerTestA,
+        InnerTestA {
+            hidden: Some(false)
+        },
+        "InnerTestA",
+        "<hidden><false /></hidden>"
+    );
+    basic_types!(
+        enumerated,
+        EnumType,
+        EnumType::First,
+        "EnumType",
+        "<eins />"
+    );
+    basic_types!(
+        choice,
+        ChoiceType,
+        ChoiceType::nested(InnerTestA { hidden: None }),
+        "ChoiceType",
+        "<nested><InnerTestA /></nested>"
+    );
 }

@@ -1,8 +1,7 @@
 use super::*;
 
 use crate::error::{
-    strings::{InvalidBmpString, PermittedAlphabetError},
-    EncodeError,
+    strings::{InvalidBmpString},
 };
 use alloc::{boxed::Box, string::String, vec::Vec};
 use once_cell::race::OnceBox;

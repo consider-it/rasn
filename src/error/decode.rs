@@ -1,7 +1,6 @@
 use core::num::ParseIntError;
 
 use super::strings::PermittedAlphabetError;
-use alloc::borrow::Cow;
 use alloc::{boxed::Box, string::ToString};
 
 use jzon::JsonValue;

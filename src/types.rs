@@ -69,7 +69,7 @@ pub type GeneralizedTime = chrono::DateTime<chrono::FixedOffset>;
 /// #[rasn(delegate)]
 /// struct TestTypeB(pub SequenceOf<InnerTestTypeB>);
 /// ```
-pub type SequenceOf<T: AsnType> = alloc::vec::Vec<T>;
+pub type SequenceOf<T> = alloc::vec::Vec<T>;
 
 /// A trait representing any type that can represented in ASN.1.
 pub trait AsnType {

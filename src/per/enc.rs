@@ -1311,7 +1311,7 @@ impl<'input> From<u8> for Input<'input> {
 mod tests {
     use super::*;
 
-    use crate::{Encoder as _, AsnType};
+    use crate::{AsnType, Encoder as _};
 
     #[derive(crate::AsnType, Default, crate::Encode, Clone, Copy)]
     #[rasn(crate_root = "crate")]
@@ -1401,7 +1401,7 @@ mod tests {
                 encoder: &mut E,
                 tag: Tag,
                 constraints: Constraints,
-                identifier: Option<&'static str>
+                identifier: Option<&'static str>,
             ) -> Result<(), E::Error> {
                 encoder
                     .encode_integer(tag, constraints, &self.0.into(), None)

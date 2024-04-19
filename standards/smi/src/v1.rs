@@ -104,7 +104,7 @@ impl Encode for Opaque {
         encoder: &mut EN,
         tag: Tag,
         constraints: Constraints,
-        identifier: Option<&'static str>
+        identifier: Option<&'static str>,
     ) -> Result<(), EN::Error> {
         encoder
             .encode_octet_string(tag, constraints, &self.0, Opaque::IDENTIFIER)

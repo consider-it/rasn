@@ -11,17 +11,19 @@ pub(crate) use rules::EncodingRules;
 /// Attempts to decode `T` from `input` using BER.
 /// # Errors
 /// Returns error specific to BER decoder if decoding is not possible.
-pub fn decode<T: crate::Decode>(input: &[u8]) -> Result<T, de::Error> {
+pub fn decode<T: crate::Decode>(input: &[u8]) -> Result<T, crate::error::DecodeError> {
     T::decode(&mut de::Decoder::new(input, de::DecoderOptions::ber()))
 }
 
 /// Attempts to encode `value` to BER.
 /// # Errors
 /// Returns error specific to BER encoder if encoding is not possible.
-pub fn encode<T: crate::Encode>(value: &T) -> Result<alloc::vec::Vec<u8>, enc::Error> {
+pub fn encode<T: crate::Encode>(
+    value: &T,
+) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     let mut enc = enc::Encoder::new(enc::EncoderOptions::ber());
 
-    value.encode(&mut enc)?;
+    value.encode(&mut enc, T::IDENTIFIER)?;
 
     Ok(enc.output())
 }
@@ -30,8 +32,8 @@ pub fn encode<T: crate::Encode>(value: &T) -> Result<alloc::vec::Vec<u8>, enc::E
 /// # Errors
 /// Returns error specific to BER encoder if encoding is not possible.
 pub fn encode_scope(
-    encode_fn: impl FnOnce(&mut crate::ber::enc::Encoder) -> Result<(), crate::ber::enc::Error>,
-) -> Result<alloc::vec::Vec<u8>, crate::ber::enc::Error> {
+    encode_fn: impl FnOnce(&mut crate::ber::enc::Encoder) -> Result<(), crate::error::EncodeError>,
+) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     let mut enc = crate::ber::enc::Encoder::new(crate::ber::enc::EncoderOptions::ber());
 
     (encode_fn)(&mut enc)?;
@@ -118,6 +120,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::items_after_statements)]
     fn set() {
         #[derive(Debug, PartialEq)]
         struct Set {
@@ -132,10 +135,11 @@ mod tests {
         impl crate::types::Constructed for Set {
             const FIELDS: crate::types::fields::Fields =
                 crate::types::fields::Fields::from_static(&[
-                    crate::types::fields::Field::new_required(u32::TAG, u32::TAG_TREE),
+                    crate::types::fields::Field::new_required(u32::TAG, u32::TAG_TREE, "age"),
                     crate::types::fields::Field::new_required(
                         Utf8String::TAG,
                         Utf8String::TAG_TREE,
+                        "name",
                     ),
                 ]);
         }
@@ -169,13 +173,13 @@ mod tests {
                     Age(u32),
                     Name(Utf8String),
                 }
-
+                let codec = decoder.codec();
                 decoder.decode_set::<Fields, _, _, _>(
                     tag,
                     |decoder, indice, tag| match (indice, tag) {
                         (0, u32::TAG) => <_>::decode(decoder).map(Fields::Age),
                         (1, Utf8String::TAG) => <_>::decode(decoder).map(Fields::Name),
-                        (_, _) => Err(D::Error::custom("unknown field")),
+                        (_, _) => Err(D::Error::custom("unknown field", codec)),
                     },
                     |fields| {
                         let mut age = None;
@@ -189,8 +193,8 @@ mod tests {
                         }
 
                         Ok(Self {
-                            age: age.ok_or_else(|| D::Error::missing_field("age"))?,
-                            name: name.ok_or_else(|| D::Error::missing_field("name"))?,
+                            age: age.ok_or_else(|| D::Error::missing_field("age", codec))?,
+                            name: name.ok_or_else(|| D::Error::missing_field("name", codec))?,
                         })
                     },
                 )
@@ -203,12 +207,17 @@ mod tests {
                 encoder: &mut EN,
                 tag: crate::Tag,
                 _: Constraints,
+                identifier: Option<&'static str>,
             ) -> Result<(), EN::Error> {
-                encoder.encode_set::<Self, _>(tag, |encoder| {
-                    self.age.encode(encoder)?;
-                    self.name.encode(encoder)?;
-                    Ok(())
-                })?;
+                encoder.encode_set::<Self, _>(
+                    tag,
+                    |encoder| {
+                        self.age.encode(encoder, u32::IDENTIFIER)?;
+                        self.name.encode(encoder, Utf8String::IDENTIFIER)?;
+                        Ok(())
+                    },
+                    identifier,
+                )?;
 
                 Ok(())
             }
@@ -320,17 +329,17 @@ mod tests {
         );
         // "230122130000-0500" - converts to canonical form "230122180000Z"
         let offset = FixedOffset::east_opt(-3600 * 5).unwrap();
-        let dt1 = UtcTime::from(DateTime::<FixedOffset>::from_local(
+        let dt1 = DateTime::<FixedOffset>::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2023, 1, 22)
                 .unwrap()
-                .and_hms_opt(13, 0, 0)
+                .and_hms_opt(18, 0, 0)
                 .unwrap(),
             offset,
-        ));
+        );
         round_trip!(
             ber,
             UtcTime,
-            dt1,
+            dt1.into(),
             &[
                 0x17, 0x0d, 0x32, 0x33, 0x30, 0x31, 0x32, 0x32, 0x31, 0x38, 0x30, 0x30, 0x30, 0x30,
                 0x5a

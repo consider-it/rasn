@@ -13,23 +13,24 @@ edition.workspace = true
 bench = false
 
 [workspace]
-members = [".", "macros", "standards/*", "compiler", "compiler/pest"]
+members = [".", "macros", "standards/*"]
 exclude = ["fuzzing"]
 
 [workspace.package]
 edition = "2021"
 license = "MIT/Apache-2.0"
-version = "0.10.3"
-repository = "https://github.com/XAMPPRocky/rasn.git"
+version = "0.14.0"
+repository = "https://github.com/librasn/rasn.git"
 
 [workspace.dependencies]
 pretty_assertions = "1.1"
-chrono = { version = "0.4.26", default-features = false, features = ["alloc"] }
+chrono = { version = "0.4.27", default-features = false, features = ["alloc"] }
 bitvec = { version = "1.0.1", default-features = false, features = ["alloc"] }
 
 [features]
-default = ["macros"]
+default = ["macros", "backtraces"]
 macros = ["rasn-derive"]
+backtraces = []
 
 [[bench]]
 name = "criterion"
@@ -49,7 +50,7 @@ num-traits = { version = "0.2.16", default-features = false }
 snafu = { version = "0.7.5", default-features = false, features = ["backtraces"] }
 bytes = { version = "1.4.0", default-features = false }
 bitvec.workspace = true
-rasn-derive = { version = "0.10", path = "macros", optional = true }
+rasn-derive = { version = "0.14", path = "macros", optional = true }
 chrono.workspace = true
 konst = { version = "0.3.5", default-features = false }
 nom-bitvec = { package = "bitvec-nom2", version = "0.2.0" }
@@ -57,6 +58,8 @@ arrayvec = { version = "0.7.4", default-features = false }
 either = { version = "1.9.0", default-features = false }
 once_cell = { version = "1.18.0", default-features = false, features = ["race", "alloc"] }
 num-integer = { version = "0.1.45", default-features = false, features = ["i128"] }
+jzon = "0.12.5"
+xml-no-std = { version = "0.8.16"}
 
 [dev-dependencies]
 criterion = "0.5.1"

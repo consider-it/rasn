@@ -9,12 +9,14 @@ use crate::types::Constraints;
 pub use super::per::*;
 
 /// Attempts to decode `T` from `input` using UPER-BASIC.
-pub fn decode<T: crate::Decode>(input: &[u8]) -> Result<T, crate::per::de::Error> {
+pub fn decode<T: crate::Decode>(input: &[u8]) -> Result<T, crate::error::DecodeError> {
     crate::per::decode(de::DecoderOptions::unaligned(), input)
 }
 
 /// Attempts to encode `value` to UPER-CANONICAL.
-pub fn encode<T: crate::Encode>(value: &T) -> Result<alloc::vec::Vec<u8>, crate::per::enc::Error> {
+pub fn encode<T: crate::Encode>(
+    value: &T,
+) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     crate::per::encode(enc::EncoderOptions::unaligned(), value)
 }
 
@@ -22,7 +24,7 @@ pub fn encode<T: crate::Encode>(value: &T) -> Result<alloc::vec::Vec<u8>, crate:
 pub fn decode_with_constraints<T: crate::Decode>(
     constraints: Constraints,
     input: &[u8],
-) -> Result<T, crate::per::de::Error> {
+) -> Result<T, crate::error::DecodeError> {
     crate::per::decode_with_constraints(de::DecoderOptions::unaligned(), constraints, input)
 }
 
@@ -30,7 +32,7 @@ pub fn decode_with_constraints<T: crate::Decode>(
 pub fn encode_with_constraints<T: crate::Encode>(
     constraints: Constraints,
     value: &T,
-) -> Result<alloc::vec::Vec<u8>, crate::per::enc::Error> {
+) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     crate::per::encode_with_constraints(enc::EncoderOptions::unaligned(), constraints, value)
 }
 
@@ -40,7 +42,6 @@ mod tests {
         prelude::*,
         types::{constraints::*, *},
     };
-
     #[test]
     fn bool() {
         round_trip!(uper, bool, true, &[0x80]);
@@ -88,7 +89,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn numeric_string() {
         round_trip!(
             uper,
@@ -974,6 +974,36 @@ mod tests {
             FourthChoice,
             FourthChoice::A(TripleChoice::B(BoolChoice::C(Choice::Normal(333.into())))),
             &[96, 8, 5, 52]
+        );
+    }
+    #[test]
+    fn test_object_identifier() {
+        round_trip!(
+            uper,
+            ObjectIdentifier,
+            ObjectIdentifier::new(vec![1, 2]).unwrap(),
+            &[0x01u8, 0x2a]
+        );
+        round_trip!(
+            uper,
+            ObjectIdentifier,
+            ObjectIdentifier::new(vec![1, 2, 3321]).unwrap(),
+            &[0x03u8, 0x2a, 0x99, 0x79]
+        );
+        #[derive(AsnType, Debug, Decode, Encode, PartialEq)]
+        #[rasn(crate_root = "crate")]
+        struct B {
+            a: bool,
+            b: ObjectIdentifier,
+        }
+        round_trip!(
+            uper,
+            B,
+            B {
+                a: true,
+                b: ObjectIdentifier::new(vec![1, 2]).unwrap()
+            },
+            &[0x80, 0x95, 0x00]
         );
     }
 }

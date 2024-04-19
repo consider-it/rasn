@@ -1,19 +1,17 @@
 //! Version 1 (RFC 1155)
 
-use core::convert::TryInto;
-
 use rasn::{
+    error::EncodeError,
     types::{Constraints, FixedOctetString, Integer, ObjectIdentifier, OctetString, Oid},
     AsnType, Decode, Encode, Tag,
 };
 
-pub const INTERNET: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET;
-pub const DIRECTORY: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_DIRECTORY;
-pub const MGMT: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_MGMT;
-pub const EXPERIMENTAL: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_EXPERIMENTAL;
-pub const PRIVATE: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_PRIVATE;
-pub const ENTERPRISES: &'static Oid =
-    Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_PRIVATE_ENTERPRISES;
+pub const INTERNET: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET;
+pub const DIRECTORY: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_DIRECTORY;
+pub const MGMT: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_MGMT;
+pub const EXPERIMENTAL: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_EXPERIMENTAL;
+pub const PRIVATE: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_PRIVATE;
+pub const ENTERPRISES: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_PRIVATE_ENTERPRISES;
 
 pub type ObjectName = ObjectIdentifier;
 
@@ -75,11 +73,11 @@ pub struct Opaque(alloc::vec::Vec<u8>);
 /// Helper trait for wrapping any valid ASN.1 type in an `Opaque` struct which
 /// first encodes the data into Basic Encoding Rules.
 pub trait ToOpaque {
-    fn to_opaque(&self) -> Result<Opaque, rasn::ber::enc::Error>;
+    fn to_opaque(&self) -> Result<Opaque, EncodeError>;
 }
 
 impl<T: Encode> ToOpaque for T {
-    fn to_opaque(&self) -> Result<Opaque, rasn::ber::enc::Error> {
+    fn to_opaque(&self) -> Result<Opaque, EncodeError> {
         rasn::ber::encode(self).map(Opaque)
     }
 }
@@ -106,9 +104,10 @@ impl Encode for Opaque {
         encoder: &mut EN,
         tag: Tag,
         constraints: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), EN::Error> {
         encoder
-            .encode_octet_string(tag, constraints, &self.0)
+            .encode_octet_string(tag, constraints, &self.0, Opaque::IDENTIFIER)
             .map(drop)
     }
 }

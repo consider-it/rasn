@@ -46,6 +46,29 @@ pub type UtcTime = chrono::DateTime<chrono::Utc>;
 ///  The `GeneralizedTime` type.
 pub type GeneralizedTime = chrono::DateTime<chrono::FixedOffset>;
 ///  The `SEQUENCE OF` type.
+/// ## Usage
+/// ASN1 declaration such as ...
+/// ```asn
+/// Test-type-a ::= SEQUENCE OF BOOLEAN
+/// Test-type-b ::= SEQUENCE OF INTEGER(1,...)
+/// ```
+/// ... can be represented using `rasn` as ...
+/// ```rust
+/// use rasn::prelude::*;
+///
+/// #[derive(AsnType, Decode, Encode)]
+/// #[rasn(delegate)]
+/// struct TestTypeA(pub SequenceOf<bool>);
+///
+/// // Constrained inner primitive types need to be wrapped in a helper newtype
+/// #[derive(AsnType, Decode, Encode)]
+/// #[rasn(delegate, value("1", extensible))]
+/// struct InnerTestTypeB(pub Integer);
+///  
+/// #[derive(AsnType, Decode, Encode)]
+/// #[rasn(delegate)]
+/// struct TestTypeB(pub SequenceOf<InnerTestTypeB>);
+/// ```
 pub type SequenceOf<T> = alloc::vec::Vec<T>;
 
 /// A trait representing any type that can represented in ASN.1.
@@ -61,10 +84,14 @@ pub trait AsnType {
     const TAG_TREE: TagTree = TagTree::Leaf(Self::TAG);
 
     const CONSTRAINTS: Constraints<'static> = Constraints::NONE;
+
+    /// Identifier of an ASN.1 type as specified in the original specification
+    /// if not identical with the identifier of `Self`
+    const IDENTIFIER: Option<&'static str> = None;
 }
 
 /// A `SET` or `SEQUENCE` value.
-pub trait Constructed {
+pub trait Constructed: AsnType {
     /// Fields contained in the "root component list".
     const FIELDS: self::fields::Fields;
     /// Fields contained in the list of extensions.
@@ -72,11 +99,13 @@ pub trait Constructed {
 }
 
 /// A `CHOICE` value.
-pub trait Choice: Sized {
+pub trait Choice: Sized + AsnType {
     /// Variants contained in the "root component list".
     const VARIANTS: &'static [TagTree];
     /// Variants contained in the list of extensions.
-    const EXTENDED_VARIANTS: &'static [TagTree] = &[];
+    const EXTENDED_VARIANTS: Option<&'static [TagTree]> = None;
+    /// Variant identifiers for text-based encoding rules
+    const IDENTIFIERS: &'static [&'static str];
 }
 
 /// A `CHOICE` value.
@@ -86,7 +115,7 @@ pub trait DecodeChoice: Choice + crate::Decode {
 }
 
 /// A `ENUMERATED` value.
-pub trait Enumerated: Sized + 'static + PartialEq + Copy + core::fmt::Debug {
+pub trait Enumerated: Sized + 'static + PartialEq + Copy + core::fmt::Debug + AsnType {
     /// Variants contained in the "root component list".
     const VARIANTS: &'static [Self];
     /// Variants contained in the list of extensions.
@@ -97,6 +126,9 @@ pub trait Enumerated: Sized + 'static + PartialEq + Copy + core::fmt::Debug {
     /// Variants contained in the list of extensions mapped to their respective discriminant, if
     /// present.
     const EXTENDED_DISCRIMINANTS: Option<&'static [(Self, isize)]>;
+
+    /// Identifiers of enum variants
+    const IDENTIFIERS: &'static [&'static str];
 
     /// Returns the number of "root" variants for a given type.
     fn variance() -> usize {
@@ -168,6 +200,40 @@ pub trait Enumerated: Sized + 'static + PartialEq + Copy + core::fmt::Debug {
     /// Returns a variant, if the index matches any "extended" variant.
     fn from_extended_enumeration_index(index: usize) -> Option<Self> {
         Self::EXTENDED_VARIANTS.and_then(|array| array.get(index).copied())
+    }
+
+    /// Returns the variant identifier
+    fn identifier(&self) -> &'static str {
+        let index = if self.is_extended_variant() {
+            Self::EXTENDED_VARIANTS
+                .unwrap()
+                .iter()
+                .position(|lhs| lhs == self)
+                .unwrap()
+                + Self::VARIANTS.len()
+        } else {
+            Self::VARIANTS
+                .iter()
+                .position(|lhs| lhs == self)
+                .expect("Variant not defined in Enumerated::VARIANTS")
+        };
+        Self::IDENTIFIERS[index]
+    }
+
+    /// Returns a variant, if the provided identifier matches any variant.
+    fn from_identifier(identifier: &str) -> Option<Self> {
+        Self::IDENTIFIERS
+            .iter()
+            .enumerate()
+            .find(|id| id.1.eq(&identifier))
+            .and_then(|(i, _)| {
+                if i < Self::VARIANTS.len() {
+                    Self::VARIANTS.get(i).copied()
+                } else {
+                    Self::EXTENDED_VARIANTS
+                        .and_then(|array| array.get(i - Self::VARIANTS.len()).copied())
+                }
+            })
     }
 }
 

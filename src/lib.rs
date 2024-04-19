@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(all(not(test), not(feature = "xer")), no_std)]
 extern crate alloc;
 
 #[cfg(test)]
@@ -44,9 +44,14 @@ mod per;
 
 pub mod aper;
 pub mod ber;
+mod bits;
 pub mod cer;
 pub mod der;
+pub mod error;
+pub mod jer;
+mod num;
 pub mod uper;
+pub mod xer;
 
 #[doc(inline)]
 pub use self::{
@@ -164,9 +169,10 @@ mod tests {
                 encoder: &mut E,
                 tag: Tag,
                 constraints: Constraints,
+                identifier: Option<&'static str>,
             ) -> Result<(), E::Error> {
                 encoder
-                    .encode_integer(tag, constraints, &self.0.into())
+                    .encode_integer(tag, constraints, &self.0.into(), None)
                     .map(drop)
             }
         }
@@ -182,7 +188,9 @@ mod tests {
 
                 let integer = decoder.decode_integer(tag, constraints)?;
 
-                Ok(Self(<_>::try_from(integer).map_err(D::Error::custom)?))
+                Ok(Self(
+                    <_>::try_from(integer).map_err(|e| D::Error::custom(e, decoder.codec()))?,
+                ))
             }
         }
 
@@ -213,7 +221,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn long_sequence_of() {
         round_trip(&vec![5u8; 0xffff]);
     }

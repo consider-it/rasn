@@ -1,14 +1,8 @@
 //! Version 2 (RFC 2578)
 
 use alloc::string::ToString;
-use core::convert::TryInto;
 
-use chrono::TimeZone;
-
-use rasn::{
-    prelude::*,
-    types::{Integer, ObjectIdentifier, OctetString, Oid, Utf8String},
-};
+use rasn::prelude::*;
 
 use crate::v1::InvalidVariant;
 
@@ -29,22 +23,19 @@ pub type Opaque = crate::v1::Opaque;
 #[rasn(delegate, tag(application, 6))]
 pub struct Counter64(pub u64);
 
-pub const ORG: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION;
-pub const DOD: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD;
-pub const INTERNET: &'static Oid = crate::v1::INTERNET;
-pub const DIRECTORY: &'static Oid = crate::v1::DIRECTORY;
-pub const MGMT: &'static Oid = crate::v1::MGMT;
-pub const EXPERIMENTAL: &'static Oid = crate::v1::EXPERIMENTAL;
-pub const PRIVATE: &'static Oid = crate::v1::PRIVATE;
-pub const ENTERPRISES: &'static Oid = crate::v1::ENTERPRISES;
-pub const SECURITY: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SECURITY;
-pub const SNMP_V2: &'static Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2;
-pub const SNMP_DOMAINS: &'static Oid =
-    Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2_DOMAINS;
-pub const SNMP_PROXIES: &'static Oid =
-    Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2_PROXIES;
-pub const SNMP_MODULES: &'static Oid =
-    Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2_MODULES;
+pub const ORG: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION;
+pub const DOD: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD;
+pub const INTERNET: &Oid = crate::v1::INTERNET;
+pub const DIRECTORY: &Oid = crate::v1::DIRECTORY;
+pub const MGMT: &Oid = crate::v1::MGMT;
+pub const EXPERIMENTAL: &Oid = crate::v1::EXPERIMENTAL;
+pub const PRIVATE: &Oid = crate::v1::PRIVATE;
+pub const ENTERPRISES: &Oid = crate::v1::ENTERPRISES;
+pub const SECURITY: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SECURITY;
+pub const SNMP_V2: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2;
+pub const SNMP_DOMAINS: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2_DOMAINS;
+pub const SNMP_PROXIES: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2_PROXIES;
+pub const SNMP_MODULES: &Oid = Oid::ISO_IDENTIFIED_ORGANISATION_DOD_INTERNET_SNMP_V2_MODULES;
 
 const FULL_DATE_FORMAT: &str = "%Y%m%d%H%MZ";
 const SHORT_DATE_FORMAT: &str = "%y%m%d%H%MZ";
@@ -84,12 +75,14 @@ impl Encode for ExtUtcTime {
         encoder: &mut EN,
         tag: Tag,
         _: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), EN::Error> {
         encoder
             .encode_octet_string(
                 tag,
                 <_>::from(&[constraints::Size::new(constraints::Bounded::single_value(13)).into()]),
                 self.0.format(FULL_DATE_FORMAT).to_string().as_bytes(),
+                ExtUtcTime::IDENTIFIER,
             )
             .map(drop)
     }
@@ -103,7 +96,12 @@ impl Decode for ExtUtcTime {
     ) -> Result<Self, D::Error> {
         let bytes = OctetString::decode_with_tag(decoder, tag)?;
         let len = bytes.len();
-        let error = || Err(rasn::de::Error::custom("Invalid `ExtUtcTime` encoding"));
+        let error = || {
+            Err(rasn::de::Error::custom(
+                "Invalid `ExtUtcTime` encoding",
+                decoder.codec(),
+            ))
+        };
 
         // YYMMDDHHMMZ || YYYYMMDDHHMMZ
         if len != 11 || len != 13 {
@@ -112,10 +110,10 @@ impl Decode for ExtUtcTime {
 
         let string = Utf8String::from_utf8_lossy(&bytes);
 
-        if let Ok(time) = chrono::Utc.datetime_from_str(&string, FULL_DATE_FORMAT) {
-            Ok(Self(time))
-        } else if let Ok(time) = chrono::Utc.datetime_from_str(&string, SHORT_DATE_FORMAT) {
-            Ok(Self(time))
+        if let Ok(time) = chrono::DateTime::parse_from_str(&string, FULL_DATE_FORMAT) {
+            Ok(Self(time.into()))
+        } else if let Ok(time) = chrono::DateTime::parse_from_str(&string, SHORT_DATE_FORMAT) {
+            Ok(Self(time.into()))
         } else {
             (error)()
         }

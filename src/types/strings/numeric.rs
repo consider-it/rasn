@@ -1,21 +1,26 @@
 use super::*;
 
+use crate::error::strings::{InvalidNumericString, PermittedAlphabetError};
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
+use once_cell::race::OnceBox;
 
 /// A string which can only contain numbers or `SPACE` characters.
 #[derive(Debug, Default, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NumericString(Vec<u8>);
+static CHARACTER_MAP: OnceBox<alloc::collections::BTreeMap<u32, u32>> = OnceBox::new();
+static INDEX_MAP: OnceBox<alloc::collections::BTreeMap<u32, u32>> = OnceBox::new();
 
 impl NumericString {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, InvalidNumericString> {
-        if !bytes
-            .iter()
-            .all(|byte| Self::CHARACTER_SET.contains(&(*byte as u32)))
-        {
-            Err(InvalidNumericString)
-        } else {
-            Ok(Self(bytes.to_owned()))
-        }
+        bytes.iter().try_for_each(|byte| {
+            if Self::CHARACTER_SET.contains(&(*byte as u32)) {
+                Ok(())
+            } else {
+                Err(InvalidNumericString { character: *byte })
+            }
+        })?;
+
+        Ok(Self(bytes.to_owned()))
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -24,7 +29,7 @@ impl NumericString {
 }
 
 impl TryFrom<BitString> for NumericString {
-    type Error = FromPermittedAlphabetError;
+    type Error = PermittedAlphabetError;
 
     fn try_from(string: BitString) -> Result<Self, Self::Error> {
         Self::try_from_permitted_alphabet(&string, None)
@@ -65,9 +70,10 @@ impl Encode for NumericString {
         encoder: &mut E,
         tag: Tag,
         constraints: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), E::Error> {
         encoder
-            .encode_numeric_string(tag, constraints, self)
+            .encode_numeric_string(tag, constraints, self, identifier)
             .map(drop)
     }
 }
@@ -99,9 +105,12 @@ impl StaticPermittedAlphabet for NumericString {
         );
         self.0.push(ch as u8);
     }
-}
 
-#[derive(snafu::Snafu, Debug)]
-#[snafu(visibility(pub(crate)))]
-#[snafu(display("Invalid numeric string"))]
-pub struct InvalidNumericString;
+    fn index_map() -> &'static alloc::collections::BTreeMap<u32, u32> {
+        INDEX_MAP.get_or_init(Self::build_index_map)
+    }
+
+    fn character_map() -> &'static alloc::collections::BTreeMap<u32, u32> {
+        CHARACTER_MAP.get_or_init(Self::build_character_map)
+    }
+}

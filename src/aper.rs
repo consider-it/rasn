@@ -8,12 +8,14 @@ use crate::types::Constraints;
 pub use super::per::*;
 
 /// Attempts to decode `T` from `input` using APER-BASIC.
-pub fn decode<T: crate::Decode>(input: &[u8]) -> Result<T, crate::per::de::Error> {
+pub fn decode<T: crate::Decode>(input: &[u8]) -> Result<T, crate::error::DecodeError> {
     crate::per::decode(de::DecoderOptions::aligned(), input)
 }
 
 /// Attempts to encode `value` to APER-CANONICAL.
-pub fn encode<T: crate::Encode>(value: &T) -> Result<alloc::vec::Vec<u8>, crate::per::enc::Error> {
+pub fn encode<T: crate::Encode>(
+    value: &T,
+) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     crate::per::encode(enc::EncoderOptions::aligned(), value)
 }
 
@@ -21,7 +23,7 @@ pub fn encode<T: crate::Encode>(value: &T) -> Result<alloc::vec::Vec<u8>, crate:
 pub fn decode_with_constraints<T: crate::Decode>(
     constraints: Constraints,
     input: &[u8],
-) -> Result<T, crate::per::de::Error> {
+) -> Result<T, crate::error::DecodeError> {
     crate::per::decode_with_constraints(de::DecoderOptions::aligned(), constraints, input)
 }
 
@@ -29,7 +31,7 @@ pub fn decode_with_constraints<T: crate::Decode>(
 pub fn encode_with_constraints<T: crate::Encode>(
     constraints: Constraints,
     value: &T,
-) -> Result<alloc::vec::Vec<u8>, crate::per::enc::Error> {
+) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
     crate::per::encode_with_constraints(enc::EncoderOptions::aligned(), constraints, value)
 }
 
@@ -286,6 +288,7 @@ mod tests {
             &[0x90, 0x27, 0x10, 0x80]
         );
     }
+
     #[test]
     fn visible_string() {
         // B ::= VisibleString (SIZE (5))
@@ -430,5 +433,63 @@ mod tests {
             VisibleString::try_from("a").unwrap(),
             &[0x01]
         );
+    }
+
+    #[test]
+    fn issue_192() {
+        // https://github.com/XAMPPRocky/rasn/issues/192
+        use crate as rasn;
+
+        use rasn::AsnType;
+
+        #[derive(rasn::AsnType, rasn::Encode, rasn::Decode, Debug, Clone, PartialEq, Eq)]
+        #[rasn(automatic_tags, option_type(Option))]
+        #[non_exhaustive]
+        pub struct Updates {
+            pub updates: Vec<u8>,
+        }
+
+        #[derive(rasn::AsnType, rasn::Encode, rasn::Decode, Debug, Clone, PartialEq, Eq)]
+        #[rasn(automatic_tags, option_type(Option))]
+        #[rasn(choice)]
+        #[non_exhaustive]
+        pub enum Message {
+            Updates(Updates),
+        }
+
+        let msg = Message::Updates(Updates { updates: vec![1] });
+
+        round_trip!(aper, Message, msg, &[0, 1, 1]);
+    }
+
+    #[test]
+    fn issue_201() {
+        use crate as rasn;
+        use crate::prelude::*;
+
+        const T124_IDENTIFIER_KEY: &Oid = Oid::const_new(&[0, 0, 20, 124, 0, 1]);
+        #[derive(Debug, AsnType, Encode, rasn::Decode)]
+        #[rasn(choice, automatic_tags)]
+        enum Key {
+            #[rasn(tag(explicit(5)))]
+            Object(ObjectIdentifier),
+            H221NonStandard(OctetString),
+        }
+
+        #[derive(Debug, AsnType, rasn::Encode, rasn::Decode)]
+        #[rasn(automatic_tags)]
+        struct ConnectData {
+            t124_identifier_key: Key,
+            connect_pdu: OctetString,
+        }
+
+        let connect_pdu: OctetString = vec![0u8, 1u8, 2u8, 3u8].into();
+        let connect_data = ConnectData {
+            t124_identifier_key: Key::Object(T124_IDENTIFIER_KEY.into()),
+            connect_pdu,
+        };
+
+        let encoded = rasn::aper::encode(&connect_data).expect("failed to encode");
+        let _: ConnectData = rasn::aper::decode(&encoded).expect("failed to decode");
     }
 }

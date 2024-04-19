@@ -66,7 +66,7 @@ macro_rules! delegate_impls {
 macro_rules! opaque_impls {
     ($name:ident $($decode:tt)+) => {
         impl core::convert::TryFrom<$crate::v2::Opaque> for $name {
-            type Error = $crate::rasn::ber::de::Error;
+            type Error = $crate::rasn::error::DecodeError;
 
             fn try_from(value: $crate::v2::Opaque) -> Result<Self, Self::Error> {
                 $crate::rasn::ber::decode(value.as_ref())
@@ -74,7 +74,7 @@ macro_rules! opaque_impls {
         }
 
         impl core::convert::TryFrom<$name> for $crate::v2::Opaque {
-            type Error = $crate::rasn::ber::enc::Error;
+            type Error = $crate::rasn::error::EncodeError;
 
             fn try_from(value: $name) -> Result<Self, Self::Error> {
                 use $crate::v1::ToOpaque;
@@ -88,10 +88,11 @@ macro_rules! opaque_impls {
                 encoder: &mut EN,
                 tag: $crate::rasn::types::Tag,
                 constraints: $crate::rasn::types::Constraints,
+                identifier: Option<&'static str>
             ) -> Result<(), EN::Error> {
                 self.to_opaque()
-                    .map_err($crate::rasn::enc::Error::custom)?
-                    .encode_with_tag_and_constraints(encoder, tag, constraints)
+                    .map_err(|e| $crate::rasn::error::EncodeError::opaque_conversion_failed(e.to_string(), encoder.codec()))?
+                    .encode_with_tag_and_constraints(encoder, tag, constraints, $name::IDENTIFIER)
             }
         }
         impl $crate::rasn::Decode for $name {
@@ -109,12 +110,12 @@ macro_rules! opaque_impls {
         }
     };
     (@decode ($decoder:ident) ($ty:ty)) => {
-        Self(<$ty as $crate::rasn::Decode>::decode($decoder).map_err($crate::rasn::de::Error::custom)?)
+        Self(<$ty as $crate::rasn::Decode>::decode($decoder)?)
     };
     (@decode ($decoder:ident) { $($field: ident : $ty:ty),* }) => {
         Self {
             $(
-                $field: <$ty as $crate::rasn::Decode>::decode($decoder).map_err($crate::rasn::de::Error::custom)?
+                $field: <$ty as $crate::rasn::Decode>::decode($decoder)?
             ),+
         }
     };
@@ -180,13 +181,13 @@ macro_rules! object_type {
 
                 let syntax = $crate::v2::ObjectSyntax::decode_with_tag_and_constraints(decoder, tag, constraints)?;
 
-                <$typ>::try_from(syntax).map_err($crate::rasn::de::Error::custom).map(Self)
+                <$typ>::try_from(syntax).map_err(|e|$crate::rasn::de::Error::custom(e, decoder.codec())).map(Self)
             }
         }
 
         impl $crate::rasn::Encode for $name {
-            fn encode_with_tag_and_constraints<EN: $crate::rasn::Encoder>(&self, encoder: &mut EN, tag: $crate::rasn::types::Tag, constraints: $crate::rasn::types::Constraints,) -> Result<(), EN::Error> {
-                self.0.encode_with_tag_and_constraints(encoder, tag, constraints)
+            fn encode_with_tag_and_constraints<EN: $crate::rasn::Encoder>(&self, encoder: &mut EN, tag: $crate::rasn::types::Tag, constraints: $crate::rasn::types::Constraints, identifier: Option<&'static str>) -> Result<(), EN::Error> {
+                self.0.encode_with_tag_and_constraints(encoder, tag, constraints, Self::IDENTIFIER)
             }
         }
 

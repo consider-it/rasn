@@ -75,9 +75,11 @@ impl<const N: usize> Decode for FixedOctetString<N> {
             .try_into()
             .map(Self)
             .map_err(|vec| {
-                crate::de::Error::custom(alloc::format!(
-                    "length mismatch, expected `{N}`, actual `{}`",
-                    vec.len()
+                D::Error::from(crate::error::DecodeError::fixed_string_conversion_failed(
+                    Tag::OCTET_STRING,
+                    vec.len(),
+                    N,
+                    decoder.codec(),
                 ))
             })
     }
@@ -89,9 +91,10 @@ impl<const N: usize> Encode for FixedOctetString<N> {
         encoder: &mut E,
         tag: Tag,
         constraints: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), E::Error> {
         encoder
-            .encode_octet_string(tag, constraints, &self.0)
+            .encode_octet_string(tag, constraints, &self.0, None)
             .map(drop)
     }
 }

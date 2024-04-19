@@ -1,5 +1,7 @@
+use std::ops::Deref;
+
 use quote::ToTokens;
-use syn::{Lit, NestedMeta, Path};
+use syn::{Lit, LitStr, NestedMeta, Path, UnOp};
 
 use crate::{ext::TypeExt, tag::Tag};
 
@@ -212,6 +214,7 @@ impl Constraints {
 #[derive(Clone, Debug)]
 pub struct Config {
     pub crate_root: Path,
+    pub identifier: Option<syn::LitStr>,
     pub enumerated: bool,
     pub choice: bool,
     pub set: bool,
@@ -227,6 +230,7 @@ impl Config {
         let mut choice = false;
         let mut set = false;
         let mut crate_root = None;
+        let mut identifier = None;
         let mut enumerated = false;
         let mut automatic_tags = false;
         let mut tag = None;
@@ -257,6 +261,13 @@ impl Config {
                     if let syn::Meta::NameValue(nv) = item {
                         crate_root = match &nv.lit {
                             syn::Lit::Str(s) => s.parse::<syn::Path>().ok(),
+                            _ => None,
+                        };
+                    }
+                } else if path.is_ident("identifier") {
+                    if let syn::Meta::NameValue(nv) = item {
+                        identifier = match &nv.lit {
+                            syn::Lit::Str(s) => Some(s.clone()),
                             _ => None,
                         };
                     }
@@ -360,6 +371,7 @@ impl Config {
             option_type,
             set,
             tag,
+            identifier,
             constraints: Constraints {
                 extensible,
                 from,
@@ -399,6 +411,7 @@ impl Config {
                     quote!(<#ty as #crate_root::AsnType>::TAG)
                 })
             })
+            .or_else(|| (fields == &syn::Fields::Unit).then(|| quote!(#crate_root::Tag::NULL)))
             .or_else(|| self.set.then(|| quote!(#crate_root::Tag::SET)))
             .unwrap_or(quote!(#crate_root::Tag::SEQUENCE))
     }
@@ -419,6 +432,7 @@ impl OptionalEnum {
                 .segments
                 .last()
                 .map_or(false, |segment| segment.ident == self.path),
+            syn::Type::Reference(syn::TypeReference { elem, .. }) => self.is_option_type(elem),
             _ => false,
         }
     }
@@ -453,6 +467,7 @@ pub struct VariantConfig<'config> {
     container_config: &'config Config,
     generics: &'config syn::Generics,
     pub tag: Option<Tag>,
+    pub identifier: Option<LitStr>,
     pub extension_addition: bool,
     pub constraints: Constraints,
 }
@@ -464,6 +479,7 @@ impl<'config> VariantConfig<'config> {
         container_config: &'config Config,
     ) -> Self {
         let mut extensible = false;
+        let mut identifier = None;
         let mut extension_addition = false;
         let mut from = None;
         let mut size = None;
@@ -484,6 +500,13 @@ impl<'config> VariantConfig<'config> {
                 let path = item.path();
                 if path.is_ident("tag") {
                     tag = Tag::from_meta(item);
+                } else if path.is_ident("identifier") {
+                    if let syn::Meta::NameValue(nv) = item {
+                        identifier = match &nv.lit {
+                            syn::Lit::Str(s) => Some(s.clone()),
+                            _ => None,
+                        };
+                    }
                 } else if path.is_ident("size") {
                     size = Some(Value::from_meta(item));
                 } else if path.is_ident("value") {
@@ -503,6 +526,7 @@ impl<'config> VariantConfig<'config> {
             extension_addition,
             generics,
             tag,
+            identifier,
             variant,
             constraints: Constraints {
                 extensible,
@@ -513,7 +537,7 @@ impl<'config> VariantConfig<'config> {
         }
     }
 
-    pub fn discriminant(&self) -> Option<usize> {
+    pub fn discriminant(&self) -> Option<isize> {
         self.variant
             .discriminant
             .as_ref()
@@ -522,6 +546,21 @@ impl<'config> VariantConfig<'config> {
                     lit: syn::Lit::Int(int),
                     ..
                 }) => int.base10_parse().ok(),
+                syn::Expr::Unary(syn::ExprUnary {
+                    op: UnOp::Neg(_),
+                    expr: e,
+                    ..
+                }) => {
+                    if let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Int(int),
+                        ..
+                    }) = e.deref()
+                    {
+                        int.base10_parse().map(|i: isize| -i).ok()
+                    } else {
+                        None
+                    }
+                }
                 _ => None,
             })
     }
@@ -690,6 +729,7 @@ pub struct FieldConfig<'a> {
     pub field: &'a syn::Field,
     pub container_config: &'a Config,
     pub tag: Option<Tag>,
+    pub identifier: Option<LitStr>,
     pub default: Option<Option<syn::Path>>,
     pub extension_addition: bool,
     pub extension_addition_group: bool,
@@ -707,6 +747,7 @@ impl<'a> FieldConfig<'a> {
         let mut default = None;
         let mut tag = None;
         let mut size = None;
+        let mut identifier = None;
         let mut from = None;
         let mut value = None;
         let mut extensible = false;
@@ -734,6 +775,13 @@ impl<'a> FieldConfig<'a> {
                         },
                         _ => None,
                     });
+                } else if path.is_ident("identifier") {
+                    if let syn::Meta::NameValue(nv) = item {
+                        identifier = match &nv.lit {
+                            syn::Lit::Str(s) => Some(s.clone()),
+                            _ => None,
+                        };
+                    }
                 } else if path.is_ident("size") {
                     size = Some(Value::from_meta(item));
                 } else if path.is_ident("value") {
@@ -763,6 +811,7 @@ impl<'a> FieldConfig<'a> {
             container_config,
             default,
             field,
+            identifier,
             tag,
             extension_addition,
             extension_addition_group,
@@ -788,18 +837,14 @@ impl<'a> FieldConfig<'a> {
         let mut ty = self.field.ty.clone();
         let crate_root = &self.container_config.crate_root;
         ty.strip_lifetimes();
-        let default_fn = self.default.as_ref().map(|default_fn| match default_fn {
-            Some(path) => quote!(#path),
-            None => quote!(<#ty>::default),
-        });
+        let default_fn = self.default_fn();
 
         let encode = if self.tag.is_some() || self.container_config.automatic_tags {
             if self.tag.as_ref().map_or(false, |tag| tag.is_explicit()) {
-                let encode = quote!(encoder.encode_explicit_prefix(#tag, &self.#field)?;);
+                let encode = quote!(encoder.encode_explicit_prefix(#tag, &self.#field, None)?;);
                 if self.is_option_type() {
-                    let none = &self.container_config.option_type.none_variant;
                     quote! {
-                        if !matches!(&#this #field, #none) {
+                        if #this #field.is_some() {
                             #encode
                         }
                     }
@@ -832,6 +877,7 @@ impl<'a> FieldConfig<'a> {
                                 #tag,
                                 <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
                                 &#this #field,
+                                None,
                                 #default_fn
                             )?;
                         )
@@ -842,14 +888,15 @@ impl<'a> FieldConfig<'a> {
                                 encoder,
                                 #tag,
                                 <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
+                                None,
                                 #default_fn
                             )?;
                         )
                     }
                     (false, true) => {
-                        quote!(encoder.encode_default_with_tag(#tag, &#this #field, #default_fn)?;)
+                        quote!(encoder.encode_default_with_tag(#tag, &#this #field, None, #default_fn)?;)
                     }
-                    (false, false) => quote!(#this #field.encode_with_tag(encoder, #tag)?;),
+                    (false, false) => quote!(#this #field.encode_with_tag(encoder, #tag, None)?;),
                 }
             }
         } else if self.extension_addition {
@@ -876,6 +923,7 @@ impl<'a> FieldConfig<'a> {
                         encoder.encode_default_with_constraints(
                             <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
                             &#this #field,
+                            None,
                             #default_fn
                         )?;
                     )
@@ -888,11 +936,12 @@ impl<'a> FieldConfig<'a> {
                         #this #field.encode_with_constraints(
                             encoder,
                             <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(#constraints),
+                            None
                         )?;
                     )
                 }
-                (false, true) => quote!(encoder.encode_default(&#this #field, #default_fn)?;),
-                (false, false) => quote!(#this #field.encode(encoder)?;),
+                (false, true) => quote!(encoder.encode_default(&#this #field, None, #default_fn)?;),
+                (false, false) => quote!(#this #field.encode(encoder, None)?;),
             }
         };
 
@@ -920,16 +969,13 @@ impl<'a> FieldConfig<'a> {
                 .unwrap_or_else(|| context.to_string())
         );
 
-        let or_else = quote!(.map_err(|error| #crate_root::de::Error::field_error(#ident, error))?);
-        let default_fn = self.default.as_ref().map(|default_fn| match default_fn {
-            Some(path) => quote!(#path),
-            None => quote!(<#ty>::default),
-        });
+        let or_else = quote!(.map_err(|error| #crate_root::de::Error::field_error(#ident, error.into(), decoder.codec()))?);
+        let default_fn: Option<proc_macro2::TokenStream> = self.default_fn();
 
         let tag = self.tag(context);
         let constraints = self.constraints.const_expr(crate_root);
         let handle_extension = if self.is_not_option_or_default_type() {
-            quote!(.ok_or_else(|| #crate_root::de::Error::field_error(#ident, "extension required but not present"))?)
+            quote!(.ok_or_else(|| #crate_root::de::Error::field_error(#ident, crate::error::DecodeError::extension_present_but_not_required(#tag, decoder.codec()), decoder.codec()))?)
         } else if self.is_default_type() {
             quote!(.unwrap_or_else(#default_fn))
         } else {
@@ -1053,6 +1099,14 @@ impl<'a> FieldConfig<'a> {
         }
     }
 
+    pub fn default_fn(&self) -> Option<proc_macro2::TokenStream> {
+        let ty = &self.field.ty;
+        self.default.as_ref().map(|default_fn| match default_fn {
+            Some(path) => quote!(#path),
+            None => quote!(<#ty>::default),
+        })
+    }
+
     pub fn tag_derive(&self, context: usize) -> proc_macro2::TokenStream {
         if let Some(tag) = &self.tag {
             if self.container_config.automatic_tags {
@@ -1101,6 +1155,15 @@ impl<'a> FieldConfig<'a> {
         let crate_root = &self.container_config.crate_root;
         let tag = self.tag(context);
         let tag_tree = self.tag_tree(context);
+        let name = self
+            .identifier
+            .clone()
+            .or(self
+                .field
+                .ident
+                .as_ref()
+                .map(|id| syn::LitStr::new(&id.to_string(), proc_macro2::Span::call_site())))
+            .unwrap_or(syn::LitStr::new("", proc_macro2::Span::call_site()));
 
         let constructor = quote::format_ident!(
             "{}",
@@ -1111,7 +1174,7 @@ impl<'a> FieldConfig<'a> {
             }
         );
 
-        quote!({ #crate_root::types::fields::Field::#constructor(#tag, #tag_tree) })
+        quote!({ #crate_root::types::fields::Field::#constructor(#tag, #tag_tree, #name) })
     }
 
     pub fn field_type(&self) -> FieldType {

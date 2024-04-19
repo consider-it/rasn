@@ -25,7 +25,7 @@ pub use {
 };
 
 pub(crate) use constrained::{
-    DynConstrainedCharacterString, FromPermittedAlphabetError, StaticPermittedAlphabet,
+    should_be_indexed, DynConstrainedCharacterString, StaticPermittedAlphabet,
 };
 
 const fn bytes_to_chars<const N: usize>(input: [u8; N]) -> [u32; N] {

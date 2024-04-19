@@ -1,8 +1,4 @@
-use snafu::*;
-
 use crate::prelude::*;
-
-pub use self::{de::DecodeError, enc::EncodeError};
 
 /// A set of supported ASN.1 codecs. Can be used to dynamically encode types
 /// into different codecs at runtime.
@@ -19,72 +15,113 @@ pub enum Codec {
     Der,
     /// X.691 — Packed Encoding Rules (Unaligned)
     Uper,
+    /// [JSON Encoding Rules](https://obj-sys.com/docs/JSONEncodingRules.pdf)
+    Jer,
+    /// X.693 — XML Encoding Rules (Unaligned)
+    Xer,
+}
+
+impl core::fmt::Display for Codec {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Aper => write!(f, "APER"),
+            Self::Ber => write!(f, "BER"),
+            Self::Cer => write!(f, "CER"),
+            Self::Der => write!(f, "DER"),
+            Self::Uper => write!(f, "UPER"),
+            Self::Jer => write!(f, "JER"),
+            Self::Xer => write!(f, "XER"),
+        }
+    }
 }
 
 impl Codec {
     /// Encodes a given value based on the value of `Codec`.
+    /// This method shall be used when using binary-based encoding rules.
     ///
     /// # Errors
-    /// - If the value fails to be encoded.
-    pub fn encode<T: Encode>(self, value: &T) -> Result<alloc::vec::Vec<u8>, EncodeError> {
+    /// - If the value fails to be encoded returns `EncodeError` struct.
+    pub fn encode_to_binary<T: Encode>(
+        self,
+        value: &T,
+    ) -> Result<alloc::vec::Vec<u8>, crate::error::EncodeError> {
         match self {
-            Self::Aper => crate::aper::encode(value).context(enc::AperSnafu),
-            Self::Ber => crate::ber::encode(value).context(enc::BerSnafu),
-            Self::Cer => crate::cer::encode(value).context(enc::CerSnafu),
-            Self::Der => crate::der::encode(value).context(enc::DerSnafu),
-            Self::Uper => crate::uper::encode(value).context(enc::UperSnafu),
+            Self::Aper => crate::aper::encode(value),
+            Self::Ber => crate::ber::encode(value),
+            Self::Cer => crate::cer::encode(value),
+            Self::Der => crate::der::encode(value),
+            Self::Uper => crate::uper::encode(value),
+            Self::Jer => crate::jer::encode(value).map(alloc::string::String::into_bytes),
+            Self::Xer => crate::xer::encode(value),
         }
     }
 
     /// Decodes `input` to `D` based on the value of `Codec`.
+    /// This method shall be used when using binary-based encoding rules.
     ///
     /// # Errors
-    /// - If `D` cannot be decoded from `input`.
-    pub fn decode<D: Decode>(&self, input: &[u8]) -> Result<D, DecodeError> {
+    /// - If `D` cannot be decoded from `input` returns `DecodeError` struct.
+    pub fn decode_from_binary<D: Decode>(
+        &self,
+        input: &[u8],
+    ) -> Result<D, crate::error::DecodeError> {
         match self {
-            Self::Aper => crate::aper::decode(input).context(de::AperSnafu),
-            Self::Ber => crate::ber::decode(input).context(de::BerSnafu),
-            Self::Cer => crate::cer::decode(input).context(de::CerSnafu),
-            Self::Der => crate::der::decode(input).context(de::DerSnafu),
-            Self::Uper => crate::uper::decode(input).context(de::UperSnafu),
+            Self::Aper => crate::aper::decode(input),
+            Self::Ber => crate::ber::decode(input),
+            Self::Cer => crate::cer::decode(input),
+            Self::Der => crate::der::decode(input),
+            Self::Uper => crate::uper::decode(input),
+            Self::Jer => alloc::string::String::from_utf8(input.to_vec()).map_or_else(
+                |e| {
+                    Err(crate::error::DecodeError::from_kind(
+                        crate::error::DecodeErrorKind::Custom {
+                            msg: alloc::format!("Failed to decode JER from UTF8 bytes: {e:?}"),
+                        },
+                        *self,
+                    ))
+                },
+                |s| crate::jer::decode(&s),
+            ),
+            Self::Xer => crate::xer::decode(input),
         }
     }
-}
 
-mod enc {
-    use super::*;
-
-    #[derive(Debug, Snafu)]
-    #[snafu(visibility(pub(crate)))]
-    pub enum EncodeError {
-        #[snafu(display("APER Error: {}", source))]
-        Aper { source: crate::aper::enc::Error },
-        #[snafu(display("BER Error: {}", source))]
-        Ber { source: crate::ber::enc::Error },
-        #[snafu(display("CER Error: {}", source))]
-        Cer { source: crate::der::enc::Error },
-        #[snafu(display("DER Error: {}", source))]
-        Der { source: crate::der::enc::Error },
-        #[snafu(display("UPER Error: {}", source))]
-        Uper { source: crate::uper::enc::Error },
+    /// Encodes a given value based on the value of `Codec`.
+    /// This method shall be used when using text-based encoding rules.
+    ///
+    /// # Errors
+    /// - If the value fails to be encoded, or if trying to encode using
+    ///   binary-based encoding rules, returns `EncodeError` struct.
+    pub fn encode_to_string<T: Encode>(
+        self,
+        value: &T,
+    ) -> Result<alloc::string::String, crate::error::EncodeError> {
+        match self {
+            Self::Jer => crate::jer::encode(value),
+            codec => Err(crate::error::EncodeError::from_kind(
+                crate::error::EncodeErrorKind::Custom {
+                    msg: alloc::format!("{codec} is a binary-based encoding. Call `Codec::encode_to_binary` instead."),
+                },
+                codec,
+            )),
+        }
     }
-}
 
-mod de {
-    use super::*;
-
-    #[derive(Debug, Snafu)]
-    #[snafu(visibility(pub(crate)))]
-    pub enum DecodeError {
-        #[snafu(display("APER Error: {}", source))]
-        Aper { source: crate::aper::de::Error },
-        #[snafu(display("BER Error: {}", source))]
-        Ber { source: crate::ber::de::Error },
-        #[snafu(display("CER Error: {}", source))]
-        Cer { source: crate::der::de::Error },
-        #[snafu(display("DER Error: {}", source))]
-        Der { source: crate::der::de::Error },
-        #[snafu(display("UPER Error: {}", source))]
-        Uper { source: crate::uper::de::Error },
+    /// Decodes `input` to `D` based on the value of `Codec`.
+    /// This method shall be used when using text-based encoding rules.
+    ///
+    /// # Errors
+    /// - If `D` cannot be decoded from `input`, or if trying to decode using
+    ///   binary-based encoding rules, returns `DecodeError` struct.
+    pub fn decode_from_str<D: Decode>(&self, input: &str) -> Result<D, crate::error::DecodeError> {
+        match self {
+            Self::Jer => crate::jer::decode(input),
+            codec => Err(crate::error::DecodeError::from_kind(
+                crate::error::DecodeErrorKind::Custom {
+                    msg: alloc::format!("{codec} is a text-based encoding. Call `Codec::decode_from_binary` instead."),
+                },
+                *codec,
+            )),
+        }
     }
 }

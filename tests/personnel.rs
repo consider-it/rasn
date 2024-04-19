@@ -22,6 +22,7 @@ impl rasn::Encode for PersonnelRecord {
         encoder: &mut EN,
         tag: rasn::Tag,
         _: rasn::types::Constraints,
+        identifier: Option<&'static str>,
     ) -> core::result::Result<(), EN::Error> {
         #[allow(unused)]
         let name = &self.name;
@@ -36,28 +37,36 @@ impl rasn::Encode for PersonnelRecord {
         #[allow(unused)]
         let children = &self.children;
         encoder
-            .encode_set::<Self, _>(tag, |encoder| {
-                dbg!(self.name.encode(encoder)?);
-                encoder.encode_explicit_prefix(
-                    rasn::Tag::new(rasn::types::Class::Context, 0),
-                    &self.title,
-                )?;
-                self.number.encode(encoder)?;
-                encoder.encode_explicit_prefix(
-                    rasn::Tag::new(rasn::types::Class::Context, 1),
-                    &self.date_of_hire,
-                )?;
-                encoder.encode_explicit_prefix(
-                    rasn::Tag::new(rasn::types::Class::Context, 2),
-                    &self.name_of_spouse,
-                )?;
-                encoder.encode_default_with_tag(
-                    rasn::Tag::new(rasn::types::Class::Context, 3),
-                    &self.children,
-                    <Vec<ChildInformation>>::default,
-                )?;
-                Ok(())
-            })
+            .encode_set::<Self, _>(
+                tag,
+                |encoder| {
+                    self.name.encode(encoder, None)?;
+                    encoder.encode_explicit_prefix(
+                        rasn::Tag::new(rasn::types::Class::Context, 0),
+                        &self.title,
+                        None,
+                    )?;
+                    self.number.encode(encoder, None)?;
+                    encoder.encode_explicit_prefix(
+                        rasn::Tag::new(rasn::types::Class::Context, 1),
+                        &self.date_of_hire,
+                        None,
+                    )?;
+                    encoder.encode_explicit_prefix(
+                        rasn::Tag::new(rasn::types::Class::Context, 2),
+                        &self.name_of_spouse,
+                        None,
+                    )?;
+                    encoder.encode_default_with_tag(
+                        rasn::Tag::new(rasn::types::Class::Context, 3),
+                        &self.children,
+                        None,
+                        <Vec<ChildInformation>>::default,
+                    )?;
+                    Ok(())
+                },
+                None,
+            )
             .map(drop)
     }
 }
@@ -212,7 +221,7 @@ pub struct ExtensiblePersonnelRecord {
     #[rasn(tag(explicit(2)))]
     pub name_of_spouse: ExtensibleName,
     #[rasn(tag(3), default, size(2, extensible))]
-    pub children: Vec<ExtensibleChildInformation>,
+    pub children: Option<Vec<ExtensibleChildInformation>>,
 }
 
 impl Default for ExtensiblePersonnelRecord {
@@ -223,10 +232,10 @@ impl Default for ExtensiblePersonnelRecord {
             number: ExtensibleEmployeeNumber(51.into()),
             date_of_hire: ExtensibleDate(VisibleString::try_from("19710917").unwrap()),
             name_of_spouse: Name::mary().into(),
-            children: vec![
+            children: Some(vec![
                 ChildInformation::ralph().into(),
                 ExtensibleChildInformation::susan(),
-            ],
+            ]),
         }
     }
 }
@@ -537,7 +546,7 @@ test! {
         0x0E, 0x2E, 0x02, 0x02, 0x80
     ];
 
-    #[ignore] ax_uper(uper): Ax = <_>::default() => &[0x9e, 0x00, 0x06, 0x00, 0x04, 0x0a, 0x46, 0x90];
+    ax_uper(uper): Ax = <_>::default() => &[0x9e, 0x00, 0x06, 0x00, 0x04, 0x0a, 0x46, 0x90];
 
     constrained_aper(aper): PersonnelRecordWithConstraints = <_>::default() => &[
         0x86, 0x4a, 0x6f, 0x68, 0x6e, 0x50, 0x10, 0x53, 0x6d, 0x69, 0x74, 0x68,
@@ -547,5 +556,18 @@ test! {
         0x53, 0x6d, 0x69, 0x74, 0x68, 0x19, 0x57, 0x11, 0x11, 0x10, 0x53, 0x75,
         0x73, 0x61, 0x6e, 0x42, 0x10, 0x4a, 0x6f, 0x6e, 0x65, 0x73, 0x19, 0x59,
         0x07, 0x17
+    ];
+    extensible_aper(aper): ExtensiblePersonnelRecord  =  <_>::default() => &[
+        0x40, 0xC0, 0x4A, 0x6F, 0x68, 0x6E, 0x50, 0x08,
+        0x53, 0x6D, 0x69, 0x74, 0x68, 0x00, 0x00, 0x33,
+        0x08, 0x44, 0x69, 0x72, 0x65, 0x63, 0x74, 0x6F,
+        0x72, 0x00, 0x19, 0x71, 0x09, 0x17, 0x03, 0x4D,
+        0x61, 0x72, 0x79, 0x54, 0x08, 0x53, 0x6D, 0x69,
+        0x74, 0x68, 0x01, 0x00, 0x52, 0x61, 0x6C, 0x70,
+        0x68, 0x54, 0x08, 0x53, 0x6D, 0x69, 0x74, 0x68,
+        0x00, 0x19, 0x57, 0x11, 0x11, 0x82, 0x00, 0x53,
+        0x75, 0x73, 0x61, 0x6E, 0x42, 0x08, 0x4A, 0x6F,
+        0x6E, 0x65, 0x73, 0x00, 0x19, 0x59, 0x07, 0x17,
+        0x01, 0x01, 0x40
     ];
 }

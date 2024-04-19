@@ -12,10 +12,7 @@
 
 use alloc::boxed::Box;
 
-use rasn::{
-    prelude::*,
-    types::{Integer, OctetString},
-};
+use rasn::prelude::*;
 
 pub use crate::v2::{
     GetBulkRequest, GetNextRequest, GetRequest, InformRequest, Pdus, Response, SetRequest, Trap,
@@ -65,7 +62,7 @@ impl Message {
         }
 
         codec
-            .decode::<T>(&self.security_parameters)
+            .decode_from_binary::<T>(&self.security_parameters)
             .map_err(|error| Box::new(error) as Box<_>)
     }
 
@@ -82,7 +79,7 @@ impl Message {
         self.global_data.security_model = T::ID.into();
 
         self.security_parameters = codec
-            .encode::<T>(value)
+            .encode_to_binary::<T>(value)
             .map_err(|error| Box::new(error) as Box<_>)?
             .into();
         Ok(())

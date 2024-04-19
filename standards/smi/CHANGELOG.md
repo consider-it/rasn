@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.4](https://github.com/XAMPPRocky/rasn/compare/rasn-smi-v0.12.3...rasn-smi-v0.12.4) - 2023-12-04
+
+### Other
+- Remove deprecated chrono functions, redundant constant lifetimes ([#212](https://github.com/XAMPPRocky/rasn/pull/212))
+
+## [0.11.0](https://github.com/XAMPPRocky/rasn/compare/rasn-smi-v0.10.6...rasn-smi-v0.11.0) - 2023-10-28
+
+### Other
+- Shared error module ([#164](https://github.com/XAMPPRocky/rasn/pull/164))
+
+## [0.10.6](https://github.com/XAMPPRocky/rasn/compare/rasn-smi-v0.10.5...rasn-smi-v0.10.6) - 2023-10-26
+
+### Other
+- update dependencies
+
 ## [0.10.0](https://github.com/XAMPPRocky/rasn/compare/rasn-smi-v0.9.5...rasn-smi-v0.10.0) - 2023-10-03
 
 ### Other

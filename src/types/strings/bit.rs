@@ -1,6 +1,19 @@
+use crate::error::DecodeError;
 use crate::prelude::*;
-
 ///  The `BIT STRING` type.
+/// /// ## Usage
+/// ASN1 declaration such as ...
+/// ```asn
+/// Test-type-a ::= BIT STRING
+/// ```
+/// ... can be represented using `rasn` as ...
+/// ```rust
+/// use rasn::prelude::*;
+///
+/// #[derive(AsnType, Decode, Encode)]
+/// #[rasn(delegate)]
+/// struct TestTypeA(pub BitString);
+/// ```
 pub type BitString = bitvec::vec::BitVec<u8, bitvec::order::Msb0>;
 ///  A fixed length `BIT STRING` type.
 pub type FixedBitString<const N: usize> = bitvec::array::BitArray<[u8; N], bitvec::order::Msb0>;
@@ -27,8 +40,11 @@ impl Encode for BitString {
         encoder: &mut E,
         tag: Tag,
         constraints: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), E::Error> {
-        encoder.encode_bit_string(tag, constraints, self).map(drop)
+        encoder
+            .encode_bit_string(tag, constraints, self, identifier)
+            .map(drop)
     }
 }
 
@@ -42,8 +58,11 @@ impl Encode for BitStr {
         encoder: &mut E,
         tag: Tag,
         constraints: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), E::Error> {
-        encoder.encode_bit_string(tag, constraints, self).map(drop)
+        encoder
+            .encode_bit_string(tag, constraints, self, identifier)
+            .map(drop)
     }
 }
 
@@ -57,11 +76,15 @@ impl<const N: usize> Decode for FixedBitString<N> {
         tag: Tag,
         constraints: Constraints,
     ) -> Result<Self, D::Error> {
-        decoder
-            .decode_bit_string(tag, constraints)?
-            .as_bitslice()
-            .try_into()
-            .map_err(crate::de::Error::custom)
+        let out = decoder.decode_bit_string(tag, constraints)?;
+        out.as_bitslice().try_into().map_err(|_| {
+            D::Error::from(DecodeError::fixed_string_conversion_failed(
+                Tag::BIT_STRING,
+                out.as_bitslice().len(),
+                N,
+                decoder.codec(),
+            ))
+        })
     }
 }
 
@@ -71,7 +94,10 @@ impl<const N: usize> Encode for FixedBitString<N> {
         encoder: &mut E,
         tag: Tag,
         constraints: Constraints,
+        identifier: Option<&'static str>,
     ) -> Result<(), E::Error> {
-        encoder.encode_bit_string(tag, constraints, self).map(drop)
+        encoder
+            .encode_bit_string(tag, constraints, self, identifier)
+            .map(drop)
     }
 }

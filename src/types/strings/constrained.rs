@@ -1,29 +1,19 @@
 use alloc::collections::BTreeMap;
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use crate::error::strings::PermittedAlphabetError;
+use alloc::{boxed::Box, vec::Vec};
 use bitvec::prelude::*;
-use once_cell::race::OnceBox;
 
 use crate::types;
 
-#[derive(Debug, snafu::Snafu)]
-pub enum FromPermittedAlphabetError {
-    #[snafu(display("error converting to string: {}", message))]
-    Other { message: String },
-    #[snafu(display(
-        "length of bits ({length}) provided not divisible by character width ({width})"
-    ))]
-    InvalidData { length: usize, width: usize },
-    #[snafu(display("index not found {}", 0))]
-    IndexNotFound { index: u32 },
-}
-
 pub(crate) trait StaticPermittedAlphabet: Sized + Default {
     const CHARACTER_SET: &'static [u32];
-    const CHARACTER_WIDTH: u32 = crate::per::log2(Self::CHARACTER_SET.len() as i128);
+    const CHARACTER_WIDTH: u32 = crate::num::log2(Self::CHARACTER_SET.len() as i128);
 
     fn push_char(&mut self, ch: u32);
     fn chars(&self) -> Box<dyn Iterator<Item = u32> + '_>;
+    fn index_map() -> &'static alloc::collections::BTreeMap<u32, u32>;
+    fn character_map() -> &'static alloc::collections::BTreeMap<u32, u32>;
     fn char_range_to_bit_range(mut range: core::ops::Range<usize>) -> core::ops::Range<usize> {
         let width = Self::CHARACTER_WIDTH as usize;
         range.start *= width;
@@ -100,47 +90,41 @@ pub(crate) trait StaticPermittedAlphabet: Sized + Default {
     }
 
     fn character_width() -> u32 {
-        crate::per::log2(Self::CHARACTER_SET.len() as i128)
+        crate::num::log2(Self::CHARACTER_SET.len() as i128)
     }
 
     fn len(&self) -> usize {
         self.chars().count()
     }
 
-    fn index_map() -> &'static alloc::collections::BTreeMap<u32, u32> {
-        static MAP: OnceBox<BTreeMap<u32, u32>> = OnceBox::new();
-
-        MAP.get_or_init(|| {
-            Box::new(
-                Self::CHARACTER_SET
-                    .iter()
-                    .copied()
-                    .enumerate()
-                    .map(|(i, e)| (e, i as u32))
-                    .collect(),
-            )
-        })
+    #[allow(clippy::box_collection)]
+    fn build_index_map() -> Box<alloc::collections::BTreeMap<u32, u32>> {
+        Box::new(
+            Self::CHARACTER_SET
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(i, e)| (e, i as u32))
+                .collect(),
+        )
     }
 
-    fn character_map() -> &'static alloc::collections::BTreeMap<u32, u32> {
-        static MAP: OnceBox<BTreeMap<u32, u32>> = OnceBox::new();
-
-        MAP.get_or_init(|| {
-            Box::new(
-                Self::CHARACTER_SET
-                    .iter()
-                    .copied()
-                    .enumerate()
-                    .map(|(i, e)| (i as u32, e))
-                    .collect(),
-            )
-        })
+    #[allow(clippy::box_collection)]
+    fn build_character_map() -> Box<alloc::collections::BTreeMap<u32, u32>> {
+        Box::new(
+            Self::CHARACTER_SET
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(i, e)| (i as u32, e))
+                .collect(),
+        )
     }
 
     fn try_from_permitted_alphabet(
         input: &types::BitStr,
         alphabet: Option<&BTreeMap<u32, u32>>,
-    ) -> Result<Self, FromPermittedAlphabetError> {
+    ) -> Result<Self, PermittedAlphabetError> {
         let alphabet = alphabet.unwrap_or_else(|| Self::character_map());
         try_from_permitted_alphabet(input, alphabet)
     }
@@ -149,10 +133,10 @@ pub(crate) trait StaticPermittedAlphabet: Sized + Default {
     fn try_from_bits(
         bits: crate::types::BitString,
         character_width: usize,
-    ) -> Result<Self, FromPermittedAlphabetError> {
+    ) -> Result<Self, PermittedAlphabetError> {
         let mut string = Self::default();
         if bits.len() % character_width != 0 {
-            return Err(FromPermittedAlphabetError::InvalidData {
+            return Err(PermittedAlphabetError::InvalidData {
                 length: bits.len(),
                 width: character_width,
             });
@@ -169,9 +153,9 @@ pub(crate) trait StaticPermittedAlphabet: Sized + Default {
 pub(crate) fn try_from_permitted_alphabet<S: StaticPermittedAlphabet>(
     input: &types::BitStr,
     alphabet: &BTreeMap<u32, u32>,
-) -> Result<S, FromPermittedAlphabetError> {
+) -> Result<S, PermittedAlphabetError> {
     let mut string = S::default();
-    let permitted_alphabet_char_width = crate::per::log2(alphabet.len() as i128);
+    let permitted_alphabet_char_width = crate::num::log2(alphabet.len() as i128);
     // Alphabet should be always indexed key-alphabetvalue pairs at this point
     let values_only = alphabet.values().copied().collect::<Vec<u32>>();
     if should_be_indexed(permitted_alphabet_char_width, &values_only) {
@@ -180,7 +164,7 @@ pub(crate) fn try_from_permitted_alphabet<S: StaticPermittedAlphabet>(
             string.push_char(
                 *alphabet
                     .get(&index)
-                    .ok_or(FromPermittedAlphabetError::IndexNotFound { index })?,
+                    .ok_or(PermittedAlphabetError::IndexNotFound { index })?,
             );
         }
     } else {
@@ -194,11 +178,7 @@ pub(crate) fn try_from_permitted_alphabet<S: StaticPermittedAlphabet>(
 }
 pub(crate) fn should_be_indexed(width: u32, character_set: &[u32]) -> bool {
     let largest_value = character_set.iter().copied().max().unwrap_or(0);
-    if 2u32.pow(width) - 1 >= largest_value {
-        false
-    } else {
-        true
-    }
+    2u32.pow(width) <= largest_value
 }
 
 #[derive(Debug, Default, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -207,42 +187,35 @@ pub struct DynConstrainedCharacterString {
     buffer: types::BitString,
 }
 
-#[derive(snafu::Snafu, Debug)]
-#[snafu(visibility(pub))]
-#[snafu(display("character not found in character set"))]
-pub struct ConstrainedConversionError;
-
 impl DynConstrainedCharacterString {
     pub fn from_bits(
         data: impl Iterator<Item = u32>,
         character_set: &[u32],
-    ) -> Result<Self, ConstrainedConversionError> {
+    ) -> Result<Self, PermittedAlphabetError> {
         let mut buffer = types::BitString::new();
-        let char_width = crate::per::log2(character_set.len() as i128);
+        let char_width = crate::num::log2(character_set.len() as i128);
         let indexed = should_be_indexed(char_width, character_set);
         let alphabet: BTreeMap<u32, u32>;
         if indexed {
-            alphabet = BTreeMap::from_iter(
-                character_set
-                    .iter()
-                    .enumerate()
-                    .map(|(i, a)| (*a, i as u32)),
-            );
+            alphabet = character_set
+                .iter()
+                .enumerate()
+                .map(|(i, a)| (*a, i as u32))
+                .collect::<BTreeMap<_, _>>();
             for ch in data {
                 let Some(index) = alphabet.get(&ch).copied() else {
-                    return Err(ConstrainedConversionError);
+                    return Err(PermittedAlphabetError::CharacterNotFound { character: ch });
                 };
                 let range = ((u32::BITS - char_width) as usize)..(u32::BITS as usize);
                 let bit_ch = &index.view_bits::<Msb0>()[range];
                 buffer.extend_from_bitslice(bit_ch);
             }
         } else {
-            alphabet = BTreeMap::from_iter(
-                character_set
-                    .iter()
-                    .enumerate()
-                    .map(|(i, a)| (i as u32, *a)),
-            );
+            alphabet = character_set
+                .iter()
+                .enumerate()
+                .map(|(i, a)| (i as u32, *a))
+                .collect::<BTreeMap<_, _>>();
             for ch in data {
                 let range = ((u32::BITS - char_width) as usize)..(u32::BITS as usize);
                 let bit_ch = &ch.view_bits::<Msb0>()[range];
@@ -257,7 +230,7 @@ impl DynConstrainedCharacterString {
     }
 
     pub fn character_width(&self) -> usize {
-        crate::per::log2(self.character_set.len() as i128) as usize
+        crate::num::log2(self.character_set.len() as i128) as usize
     }
 
     #[allow(unused)]

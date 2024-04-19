@@ -1,6 +1,11 @@
+use std::str::FromStr;
+
+use proc_macro2::Literal;
+use quote::ToTokens;
 use syn::Fields;
 
 use crate::{config::*, ext::GenericsExt};
+#[allow(clippy::too_many_lines)]
 
 pub fn derive_struct_impl(
     name: syn::Ident,
@@ -10,6 +15,7 @@ pub fn derive_struct_impl(
 ) -> proc_macro2::TokenStream {
     let mut list = vec![];
     let crate_root = &config.crate_root;
+    let crate_root_literal = config.crate_root.to_token_stream().to_string();
     generics.add_trait_bounds(crate_root, quote::format_ident!("Decode"));
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
@@ -73,6 +79,7 @@ pub fn derive_struct_impl(
                     quote! {
                         #[derive(#crate_root::AsnType, #crate_root::Decode, #crate_root::Encode)]
                         #[rasn(delegate)]
+                        #[rasn(crate_root = #crate_root_literal)]
                         #tag_attr
                         #constraints
                         pub struct #name(#ty);
@@ -85,6 +92,7 @@ pub fn derive_struct_impl(
 
         let choice_def = quote! {
             #[derive(#crate_root::AsnType, #crate_root::Decode, #crate_root::Encode)]
+            #[rasn(crate_root = #crate_root_literal)]
             #[rasn(choice)]
             enum #choice_name {
                 #(#field_type_names(#field_type_names)),*
@@ -117,7 +125,7 @@ pub fn derive_struct_impl(
                 let set_field_impl = if config.extension_addition || config.extension_addition_group {
                     quote! {
                         if #ident.is_some() {
-                            return Err(rasn::de::Error::duplicate_field(stringify!(#ident)))
+                            return Err(#crate_root::de::Error::duplicate_field(stringify!(#ident), codec))
                         } else {
                             #ident = value.0;
                         }
@@ -125,7 +133,7 @@ pub fn derive_struct_impl(
                 } else {
                     quote! {
                         if #ident.replace(value.0).is_some() {
-                            return Err(rasn::de::Error::duplicate_field(stringify!(#ident)))
+                            return Err(#crate_root::de::Error::duplicate_field(stringify!(#ident), codec))
                         }
                     }
                 };
@@ -139,6 +147,7 @@ pub fn derive_struct_impl(
 
         quote! {
             #choice_def
+            let codec = decoder.codec();
             #(#field_type_defs)*
 
             decoder.decode_set::<#choice_name, _, _, _>(tag, |decoder, index, tag| {
@@ -146,7 +155,7 @@ pub fn derive_struct_impl(
 
                     Ok(match (index, tag) {
                         #(#field_match_arms)*
-                        _ => return Err(#crate_root::de::Error::custom("Unknown field provided.")),
+                        _ => return Err(#crate_root::de::Error::unknown_field(index, tag, codec)),
                     })
                 },
                 |fields| {
@@ -158,15 +167,20 @@ pub fn derive_struct_impl(
                         }
                     }
 
-                    #(let #required_field_names = #required_field_names.ok_or_else(|| #crate_root::de::Error::missing_field(stringify!(#required_field_names)))?;)*
+                    #(let #required_field_names = #required_field_names.ok_or_else(|| #crate_root::de::Error::missing_field(stringify!(#required_field_names), codec))?;)*
 
                     Ok(Self #set_init)
                 }
             )
         }
     } else {
+        let mut all_fields_optional_or_default = true;
         for (i, field) in container.fields.iter().enumerate() {
             let field_config = FieldConfig::new(field, config);
+
+            if !field_config.is_option_or_default_type() {
+                all_fields_optional_or_default = false;
+            }
 
             list.push(field_config.decode_field_def(&name, i));
         }
@@ -177,8 +191,41 @@ pub fn derive_struct_impl(
             Fields::Unit => quote!(),
         };
 
+        let initializer_fn = if all_fields_optional_or_default {
+            let fields = match container.fields {
+                Fields::Named(_) => {
+                    let init_fields = container.fields.iter().map(|field| {
+                        let default_fn = FieldConfig::new(field, config)
+                            .default_fn()
+                            .unwrap_or(quote!(<_>::default));
+                        let name = &field.ident;
+                        quote!(#name : #default_fn ())
+                    });
+
+                    quote!({ #(#init_fields),* })
+                }
+                Fields::Unnamed(_) => {
+                    let init_fields = container.fields.iter().map(|field| {
+                        let default_fn = FieldConfig::new(field, config)
+                            .default_fn()
+                            .unwrap_or(quote!(<_>::default));
+                        quote!(#default_fn ())
+                    });
+                    quote!(( #(#init_fields),* ))
+                }
+                Fields::Unit => quote!(),
+            };
+            quote! {
+                Some(|| {
+                    Self #fields
+                })
+            }
+        } else {
+            quote!(None::<fn() -> Self>)
+        };
+
         quote! {
-            decoder.decode_sequence(tag, |decoder| {
+            decoder.decode_sequence(tag, #initializer_fn, |decoder| {
                 Ok(Self #fields)
             })
         }

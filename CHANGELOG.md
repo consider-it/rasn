@@ -6,6 +6,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0](https://github.com/librasn/rasn/compare/rasn-v0.13.1...rasn-v0.14.0) - 2024-04-04
+
+### Fixed
+- *(jer)* ENUMERATED values as strings ([#242](https://github.com/librasn/rasn/pull/242))
+
+### Other
+- Fix/jer compliance ([#243](https://github.com/librasn/rasn/pull/243))
+- Feat/identifier annotation ([#239](https://github.com/librasn/rasn/pull/239))
+
+## [0.13.1](https://github.com/librasn/rasn/compare/rasn-v0.13.0...rasn-v0.13.1) - 2024-03-21
+
+### Other
+- Manually fix the incompatible versions (a result of v0.13.0 release) and some clippy warnings ([#237](https://github.com/librasn/rasn/pull/237))
+
+## [0.12.6](https://github.com/librasn/rasn/compare/rasn-v0.12.5...rasn-v0.12.6) - 2024-03-09
+
+### Fixed
+- fix char and index maps, enable tests ([#230](https://github.com/librasn/rasn/pull/230))
+- fix no_std being commented out
+- *(types)* stack overflow in ObjectIdentifier PartialEq ([#223](https://github.com/librasn/rasn/pull/223))
+
+### Other
+- *(macros)* Treat Unit Structs as ASN.1 NULL ([#227](https://github.com/librasn/rasn/pull/227))
+- *(README)* add declaration reference ([#159](https://github.com/librasn/rasn/pull/159))
+- Fix calling the specified default fn
+- Add default_initializer_fn optimisation
+
+## [0.12.5](https://github.com/librasn/rasn/compare/rasn-v0.12.4...rasn-v0.12.5) - 2024-02-02
+
+### Fixed
+- *(der)* sort SET OF items ([#220](https://github.com/librasn/rasn/pull/220))
+- *(macro)* recognize option references ([#219](https://github.com/librasn/rasn/pull/219))
+
+### Other
+- remove legacy compiler ([#221](https://github.com/librasn/rasn/pull/221))
+- Make backtraces as feature, enabled by default ([#214](https://github.com/librasn/rasn/pull/214))
+
+## [0.12.4](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.12.3...rasn-v0.12.4) - 2023-12-04
+
+### Other
+- Remove deprecated chrono functions, redundant constant lifetimes ([#212](https://github.com/XAMPPRocky/rasn/pull/212))
+
+## [0.12.3](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.12.2...rasn-v0.12.3) - 2023-11-25
+
+### Other
+- Fix issue with decoding of BasicOcspResponse. ([#208](https://github.com/XAMPPRocky/rasn/pull/208))
+
+## [0.12.2](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.12.1...rasn-v0.12.2) - 2023-11-23
+
+### Other
+- Fix/issue 204 ([#206](https://github.com/XAMPPRocky/rasn/pull/206))
+
+## [0.12.1](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.12.0...rasn-v0.12.1) - 2023-11-14
+
+### Other
+- Fix PER ObjectIdentifier, Alignment for Choice index encoding ([#202](https://github.com/XAMPPRocky/rasn/pull/202))
+
+## [0.12.0](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.11.1...rasn-v0.12.0) - 2023-11-12
+
+### Fixed
+- *(macros)* handle negative discriminants
+
+### Other
+- Add `Option<T::EXTENDED_VARIANTS>` for Choice, clippy cleanup for relevant macros ([#200](https://github.com/XAMPPRocky/rasn/pull/200))
+- Fix issue [#192](https://github.com/XAMPPRocky/rasn/pull/192), add APER ExtensiblePersonnelRecord with bug fixes  ([#199](https://github.com/XAMPPRocky/rasn/pull/199))
+- Feature/jer ([#187](https://github.com/XAMPPRocky/rasn/pull/187))
+- Field_error improved, Boxed error `kind`, explicit naming also for `DecodeErrorKind` ([#197](https://github.com/XAMPPRocky/rasn/pull/197))
+- run cargo fmt
+
+## [0.11.1](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.11.0...rasn-v0.11.1) - 2023-11-06
+
+### Other
+- Use `ok_or_else` instead of `ok_or` in Error handling for performance ([#195](https://github.com/XAMPPRocky/rasn/pull/195))
+- Move some generally useful functions from PER to utility module ([#190](https://github.com/XAMPPRocky/rasn/pull/190))
+
+## [0.11.0](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.10.6...rasn-v0.11.0) - 2023-10-28
+
+### Other
+- Shared error module ([#164](https://github.com/XAMPPRocky/rasn/pull/164))
+
+## [0.10.6](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.10.5...rasn-v0.10.6) - 2023-10-26
+
+### Other
+- Fix deprecated chrono functions ([#184](https://github.com/XAMPPRocky/rasn/pull/184))
+- Add CI check for formatted files and reformat source ([#181](https://github.com/XAMPPRocky/rasn/pull/181))
+
+## [0.10.5](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.10.4...rasn-v0.10.5) - 2023-10-19
+
+### Fixed
+- *(per)* encoding extensible string types ([#179](https://github.com/XAMPPRocky/rasn/pull/179))
+
+## [0.10.4](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.10.3...rasn-v0.10.4) - 2023-10-16
+
+### Other
+- four uper issues ([#177](https://github.com/XAMPPRocky/rasn/pull/177))
+
 ## [0.10.3](https://github.com/XAMPPRocky/rasn/compare/rasn-v0.10.2...rasn-v0.10.3) - 2023-10-11
 
 ### Other

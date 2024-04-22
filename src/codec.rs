@@ -98,6 +98,14 @@ impl Codec {
     ) -> Result<alloc::string::String, crate::error::EncodeError> {
         match self {
             Self::Jer => crate::jer::encode(value),
+            Self::Xer => crate::xer::encode(value).and_then(|bytes| alloc::string::String::from_utf8(bytes).map_err(|e| {
+                crate::error::EncodeError::from_kind(
+                    crate::error::EncodeErrorKind::Custom {
+                        msg: alloc::format!("Failed to encode XER to string: {e:?}"),
+                    },
+                    Self::Xer,
+                )
+            })),
             codec => Err(crate::error::EncodeError::from_kind(
                 crate::error::EncodeErrorKind::Custom {
                     msg: alloc::format!("{codec} is a binary-based encoding. Call `Codec::encode_to_binary` instead."),
@@ -116,6 +124,7 @@ impl Codec {
     pub fn decode_from_str<D: Decode>(&self, input: &str) -> Result<D, crate::error::DecodeError> {
         match self {
             Self::Jer => crate::jer::decode(input),
+            Self::Xer => crate::xer::decode(input.as_bytes()),
             codec => Err(crate::error::DecodeError::from_kind(
                 crate::error::DecodeErrorKind::Custom {
                     msg: alloc::format!("{codec} is a text-based encoding. Call `Codec::decode_from_binary` instead."),

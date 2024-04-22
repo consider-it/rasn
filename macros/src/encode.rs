@@ -23,8 +23,7 @@ pub fn derive_struct_impl(
 
         if let Some(tag) = config.tag.as_ref().filter(|tag| tag.is_explicit()) {
             let tag = tag.to_tokens(crate_root);
-            let encode =
-                quote!(encoder.encode_explicit_prefix(#tag, &self.0, identifier).map(drop));
+            let encode = quote!(encoder.encode_explicit_prefix(#tag, &self.0, identifier.or(Self::IDENTIFIER)).map(drop));
             if config.option_type.is_option_type(ty) {
                 quote! {
                     if &self.0.is_some() {
@@ -46,7 +45,7 @@ pub fn derive_struct_impl(
                             encoder,
                             tag,
                             <#ty as #crate_root::AsnType>::CONSTRAINTS.override_constraints(constraints),
-                            identifier
+                            identifier.or(Self::IDENTIFIER)
                         )
                     }
                 }

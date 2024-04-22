@@ -70,9 +70,9 @@ pub(crate) fn range_from_bits(bits: u32) -> i128 {
 pub(crate) fn to_vec(
     slice: &bitvec::slice::BitSlice<u8, bitvec::order::Msb0>,
     pad_start: bool,
-) -> Vec<u8> {
+) -> alloc::vec::Vec<u8> {
     use bitvec::prelude::*;
-    let mut vec = Vec::new();
+    let mut vec = alloc::vec::Vec::new();
 
     if pad_start {
         for slice in pad(slice).chunks(8) {

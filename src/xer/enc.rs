@@ -1,9 +1,5 @@
 //! # Encoding XER.
-use core::{
-    borrow::Borrow,
-    fmt::Write,
-    ops::{Deref},
-};
+use core::{borrow::Borrow, fmt::Write, ops::Deref};
 
 use crate::{
     alloc::{

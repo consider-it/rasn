@@ -1,8 +1,5 @@
-
 use super::{AsnType, Class, Constraints, ObjectIdentifier, Tag};
-use crate::{
-    types::fields::{Field, FieldPresence, Fields},
-};
+use crate::types::fields::{Field, FieldPresence, Fields};
 
 /// An instance of a defined object class.
 #[derive(Clone, Debug, PartialEq, PartialOrd, Ord, Eq, Hash)]

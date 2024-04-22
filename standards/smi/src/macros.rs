@@ -123,7 +123,7 @@ macro_rules! opaque_impls {
 
 /// A declarative macro for generating SMI objects. This macro accepts a list
 /// of statements preceeded by a struct-like definition
-/// ```
+/// ```ignore
 /// rasn_smi::object_type! {
 ///     /// A textual description of the entity.  This value should include the
 ///     /// full name and version identification of the system's hardware type,

@@ -3,7 +3,9 @@ extern crate alloc;
 
 use core::borrow::Borrow;
 
-use xml_no_std::{attribute::Attribute, common::XmlVersion, reader::XmlEvent, ParserConfig};
+use xml_no_std::{
+    attribute::Attribute, common::XmlVersion, name::OwnedName, reader::XmlEvent, ParserConfig,
+};
 
 use crate::{
     error::*,
@@ -63,6 +65,7 @@ macro_rules! tag {
 
 macro_rules! decode_string {
     ($this:ident, $tryfrom:path, $tag:path, $needed:literal) => {{
+        tag!(StartElement, $this)?;
         let value = match $this.next_element() {
             Some(XmlEvent::Characters(value)) => $tryfrom(value).map_err(|e| {
                 DecodeError::string_conversion_failed(
@@ -133,6 +136,7 @@ impl XerElement {
 
 pub struct Decoder {
     stack: alloc::vec::Vec<XerElement>,
+    in_list: bool,
 }
 
 impl Decoder {
@@ -211,6 +215,11 @@ impl Decoder {
         }
         Ok(())
     }
+
+    fn into_list_decoder(mut self) -> Self {
+        self.in_list = true;
+        self
+    }
 }
 
 impl TryFrom<alloc::collections::VecDeque<XmlEvent>> for Decoder {
@@ -256,7 +265,10 @@ impl TryFrom<alloc::collections::VecDeque<XmlEvent>> for Decoder {
                 (Some(_), event) => events.push_back(event),
             }
         }
-        Ok(Self { stack })
+        Ok(Self {
+            stack,
+            in_list: false,
+        })
     }
 }
 
@@ -384,7 +396,9 @@ impl crate::Decoder for Decoder {
     }
 
     fn decode_enumerated<E: Enumerated>(&mut self, __tag: Tag) -> Result<E, Self::Error> {
-        tag!(StartElement, self)?;
+        if !self.in_list {
+            tag!(StartElement, self)?;
+        }
         let value = match self.next_element() {
             Some(XmlEvent::StartElement { name, .. }) => {
                 if let Some(e) = E::from_identifier(&name.local_name) {
@@ -402,7 +416,9 @@ impl crate::Decoder for Decoder {
             })),
             None => Err(error!(EndOfXmlInput)),
         };
-        tag!(EndElement, self)?;
+        if !self.in_list {
+            tag!(EndElement, self)?;
+        }
         value
     }
 
@@ -714,7 +730,14 @@ impl crate::Decoder for Decoder {
     }
 
     fn decode_optional<D: Decode>(&mut self) -> Result<Option<D>, Self::Error> {
-        Ok(D::decode(self).ok())
+        match self.peek() {
+            Some(XmlEvent::Characters(c)) if c == OPTIONAL_ITEM_NOT_PRESENT => {
+                let _ = self.next_element();
+                return Ok(None);
+            }
+            _ => (),
+        }
+        D::decode(self).map(Some)
     }
 
     fn decode_optional_with_tag<D: Decode>(&mut self, _tag: Tag) -> Result<Option<D>, Self::Error> {
@@ -803,7 +826,7 @@ fn parse_object_identifier(val: &str) -> Result<ObjectIdentifier, DecodeError> {
 fn decode_sequence_or_set_items<D: Decode>(
     decoder: &mut Decoder,
 ) -> Result<alloc::vec::Vec<D>, DecodeError> {
-    let _identifier = match decoder.next_element() {
+    let identifier = match decoder.next_element() {
         Some(XmlEvent::StartElement { name, .. }) => Ok(name),
         elem => Err(DecodeError::from(XerDecodeErrorKind::XmlTypeMismatch {
             needed: "StartElement of SEQUENCE OF",
@@ -817,10 +840,15 @@ fn decode_sequence_or_set_items<D: Decode>(
         .ok_or_else(|| error!(EndOfXmlInput))?
         .events
         .try_into()?;
+    inner_decoder = inner_decoder.into_list_decoder();
 
     let mut items = alloc::vec::Vec::new();
-    while inner_decoder.peek().is_some() {
-        items.push(D::decode(&mut inner_decoder)?);
+    loop {
+        match inner_decoder.peek() {
+            Some(XmlEvent::EndElement { name }) if name == &identifier => break,
+            None => break,
+            _ => items.push(D::decode(&mut inner_decoder)?),
+        }
     }
     items.reverse();
 
@@ -1269,5 +1297,56 @@ mod tests {
             ObjectIdentifier::decode(&mut decoder).unwrap(),
             ObjectIdentifier::new(&[1, 0, 8571, 2, 1]).unwrap()
         )
+    }
+
+    #[test]
+    fn mapem() {
+        use crate::Encode;
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(delegate, crate_root = "crate", size("1..=63"))]
+        pub struct DescriptiveName(pub Ia5String);
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(automatic_tags, crate_root = "crate")]
+        #[non_exhaustive]
+        pub struct IntersectionGeometry {
+            pub name: Option<DescriptiveName>,
+        }
+        impl IntersectionGeometry {
+            pub fn new(name: Option<DescriptiveName>) -> Self {
+                Self { name }
+            }
+        }
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(delegate, crate_root = "crate", size("1..=32"))]
+        pub struct IntersectionGeometryList(pub SequenceOf<IntersectionGeometry>);
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(automatic_tags, crate_root = "crate")]
+        #[allow(clippy::upper_case_acronyms)]
+        pub struct MAPEM {
+            pub map: MapData,
+        }
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(automatic_tags, crate_root = "crate")]
+        #[non_exhaustive]
+        pub struct MapData {
+            pub intersections: Option<IntersectionGeometryList>,
+        }
+        impl MapData {
+            pub fn new(intersections: Option<IntersectionGeometryList>) -> Self {
+                Self { intersections }
+            }
+        }
+
+        let encoded = r#"<?xml version="1.0"?><MAPEM><map><intersections><IntersectionGeometry><name>MAP_ITS_00\19\19.3</name></IntersectionGeometry></intersections></map></MAPEM>"#;
+        assert_eq!(
+            MAPEM {
+                map: MapData::new(Some(IntersectionGeometryList(vec![
+                    IntersectionGeometry::new(Some(DescriptiveName(
+                        Ia5String::from_iso646_bytes(r#"MAP_ITS_00\19\19.3"#.as_bytes()).unwrap()
+                    )))
+                ])))
+            },
+            crate::xer::decode::<MAPEM>(encoded.as_bytes()).unwrap()
+        );
     }
 }

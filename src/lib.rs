@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![cfg_attr(all(not(test), not(feature = "xer")), no_std)]
+#![cfg_attr(all(not(test)), no_std)]
 extern crate alloc;
 
 #[cfg(test)]

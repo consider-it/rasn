@@ -3,7 +3,9 @@ extern crate alloc;
 
 use core::borrow::Borrow;
 
-use xml_no_std::{attribute::Attribute, common::XmlVersion, reader::XmlEvent, ParserConfig};
+use xml_no_std::{
+    attribute::Attribute, common::XmlVersion, name::OwnedName, reader::XmlEvent, ParserConfig,
+};
 
 use crate::{
     error::*,
@@ -134,6 +136,7 @@ impl XerElement {
 
 pub struct Decoder {
     stack: alloc::vec::Vec<XerElement>,
+    in_list: bool,
 }
 
 impl Decoder {
@@ -212,6 +215,11 @@ impl Decoder {
         }
         Ok(())
     }
+
+    fn into_list_decoder(mut self) -> Self {
+        self.in_list = true;
+        self
+    }
 }
 
 impl TryFrom<alloc::collections::VecDeque<XmlEvent>> for Decoder {
@@ -257,7 +265,10 @@ impl TryFrom<alloc::collections::VecDeque<XmlEvent>> for Decoder {
                 (Some(_), event) => events.push_back(event),
             }
         }
-        Ok(Self { stack })
+        Ok(Self {
+            stack,
+            in_list: false,
+        })
     }
 }
 
@@ -385,7 +396,9 @@ impl crate::Decoder for Decoder {
     }
 
     fn decode_enumerated<E: Enumerated>(&mut self, __tag: Tag) -> Result<E, Self::Error> {
-        tag!(StartElement, self)?;
+        if !self.in_list {
+            tag!(StartElement, self)?;
+        }
         let value = match self.next_element() {
             Some(XmlEvent::StartElement { name, .. }) => {
                 if let Some(e) = E::from_identifier(&name.local_name) {
@@ -403,7 +416,9 @@ impl crate::Decoder for Decoder {
             })),
             None => Err(error!(EndOfXmlInput)),
         };
-        tag!(EndElement, self)?;
+        if !self.in_list {
+            tag!(EndElement, self)?;
+        }
         value
     }
 
@@ -811,7 +826,7 @@ fn parse_object_identifier(val: &str) -> Result<ObjectIdentifier, DecodeError> {
 fn decode_sequence_or_set_items<D: Decode>(
     decoder: &mut Decoder,
 ) -> Result<alloc::vec::Vec<D>, DecodeError> {
-    let _identifier = match decoder.next_element() {
+    let identifier = match decoder.next_element() {
         Some(XmlEvent::StartElement { name, .. }) => Ok(name),
         elem => Err(DecodeError::from(XerDecodeErrorKind::XmlTypeMismatch {
             needed: "StartElement of SEQUENCE OF",
@@ -825,10 +840,15 @@ fn decode_sequence_or_set_items<D: Decode>(
         .ok_or_else(|| error!(EndOfXmlInput))?
         .events
         .try_into()?;
+    inner_decoder = inner_decoder.into_list_decoder();
 
     let mut items = alloc::vec::Vec::new();
-    while inner_decoder.peek().is_some() {
-        items.push(D::decode(&mut inner_decoder)?);
+    loop {
+        match inner_decoder.peek() {
+            Some(XmlEvent::EndElement { name }) if name == &identifier => break,
+            None => break,
+            _ => items.push(D::decode(&mut inner_decoder)?),
+        }
     }
     items.reverse();
 

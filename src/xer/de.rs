@@ -63,6 +63,7 @@ macro_rules! tag {
 
 macro_rules! decode_string {
     ($this:ident, $tryfrom:path, $tag:path, $needed:literal) => {{
+        tag!(StartElement, $this)?;
         let value = match $this.next_element() {
             Some(XmlEvent::Characters(value)) => $tryfrom(value).map_err(|e| {
                 DecodeError::string_conversion_failed(
@@ -1276,5 +1277,56 @@ mod tests {
             ObjectIdentifier::decode(&mut decoder).unwrap(),
             ObjectIdentifier::new(&[1, 0, 8571, 2, 1]).unwrap()
         )
+    }
+
+    #[test]
+    fn mapem() {
+        use crate::Encode;
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(delegate, crate_root = "crate", size("1..=63"))]
+        pub struct DescriptiveName(pub Ia5String);
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(automatic_tags, crate_root = "crate")]
+        #[non_exhaustive]
+        pub struct IntersectionGeometry {
+            pub name: Option<DescriptiveName>,
+        }
+        impl IntersectionGeometry {
+            pub fn new(name: Option<DescriptiveName>) -> Self {
+                Self { name }
+            }
+        }
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(delegate, crate_root = "crate", size("1..=32"))]
+        pub struct IntersectionGeometryList(pub SequenceOf<IntersectionGeometry>);
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(automatic_tags, crate_root = "crate")]
+        #[allow(clippy::upper_case_acronyms)]
+        pub struct MAPEM {
+            pub map: MapData,
+        }
+        #[derive(AsnType, Debug, Clone, Decode, Encode, PartialEq)]
+        #[rasn(automatic_tags, crate_root = "crate")]
+        #[non_exhaustive]
+        pub struct MapData {
+            pub intersections: Option<IntersectionGeometryList>,
+        }
+        impl MapData {
+            pub fn new(intersections: Option<IntersectionGeometryList>) -> Self {
+                Self { intersections }
+            }
+        }
+
+        let encoded = r#"<?xml version="1.0"?><MAPEM><map><intersections><IntersectionGeometry><name>MAP_ITS_00\19\19.3</name></IntersectionGeometry></intersections></map></MAPEM>"#;
+        assert_eq!(
+            MAPEM {
+                map: MapData::new(Some(IntersectionGeometryList(vec![
+                    IntersectionGeometry::new(Some(DescriptiveName(
+                        Ia5String::from_iso646_bytes(r#"MAP_ITS_00\19\19.3"#.as_bytes()).unwrap()
+                    )))
+                ])))
+            },
+            crate::xer::decode::<MAPEM>(encoded.as_bytes()).unwrap()
+        );
     }
 }

@@ -714,7 +714,14 @@ impl crate::Decoder for Decoder {
     }
 
     fn decode_optional<D: Decode>(&mut self) -> Result<Option<D>, Self::Error> {
-        Ok(D::decode(self).ok())
+        match self.peek() {
+            Some(XmlEvent::Characters(c)) if c == OPTIONAL_ITEM_NOT_PRESENT => {
+                let _ = self.next_element();
+                return Ok(None);
+            }
+            _ => (),
+        }
+        D::decode(self).map(Some)
     }
 
     fn decode_optional_with_tag<D: Decode>(&mut self, _tag: Tag) -> Result<Option<D>, Self::Error> {

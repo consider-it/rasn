@@ -400,25 +400,31 @@ impl crate::Decoder for Decoder {
             tag!(StartElement, self)?;
         }
         let value = match self.next_element() {
-            Some(XmlEvent::StartElement { name, .. }) => {
-                if let Some(e) = E::from_identifier(&name.local_name) {
+            Some(XmlEvent::StartElement {
+                name: OwnedName { local_name, .. },
+                ..
+            }) => {
+                if let Some(e) = E::from_identifier(&local_name) {
                     tag!(EndElement, self).map(|_| e)
                 } else {
                     Err(DecodeError::from(XerDecodeErrorKind::XmlTypeMismatch {
                         needed: "enumerated value",
-                        found: alloc::format!("{name:?}"),
+                        found: local_name,
                     }))
                 }
             }
+            Some(XmlEvent::Characters(c)) => E::from_identifier(&c).ok_or(DecodeError::from(
+                XerDecodeErrorKind::XmlTypeMismatch {
+                    needed: "enumerated value",
+                    found: c,
+                },
+            )),
             Some(elem) => Err(DecodeError::from(XerDecodeErrorKind::XmlTypeMismatch {
                 needed: "enumerated value",
                 found: alloc::format!("{elem:?}"),
             })),
             None => Err(error!(EndOfXmlInput)),
         };
-        if !self.in_list {
-            tag!(EndElement, self)?;
-        }
         value
     }
 
@@ -1034,7 +1040,9 @@ mod tests {
     #[test]
     fn enumerated() {
         let mut decoder = Decoder::new("<TestEnum><option-B/></TestEnum>".as_bytes()).unwrap();
-        assert_eq!(TestEnum::decode(&mut decoder).unwrap(), TestEnum::OptionB)
+        assert_eq!(TestEnum::decode(&mut decoder).unwrap(), TestEnum::OptionB);
+        let mut decoder = Decoder::new("<TestEnum>option-B</TestEnum>".as_bytes()).unwrap();
+        assert_eq!(TestEnum::decode(&mut decoder).unwrap(), TestEnum::OptionB);
     }
 
     #[derive(AsnType, Debug, Decode, PartialEq)]
@@ -1254,7 +1262,7 @@ mod tests {
                 wine: Some(false),
                 grappa: bitvec::bitvec![u8, bitvec::prelude::Msb0; 1, 0, 1, 0]
             }
-        )
+        );
     }
 
     #[test]
@@ -1267,7 +1275,7 @@ mod tests {
                 wine: None,
                 grappa: bitvec::bitvec![u8, bitvec::prelude::Msb0; 1, 0, 1, 0]
             }
-        )
+        );
     }
 
     #[derive(AsnType, Debug, Decode, PartialEq)]

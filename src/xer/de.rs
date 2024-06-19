@@ -1,10 +1,13 @@
 //! # Decoding XER
 extern crate alloc;
 
+use crate::alloc::string::ToString;
 use core::borrow::Borrow;
 
+use chrono::format::Item;
 use xml_no_std::{
-    attribute::Attribute, common::XmlVersion, name::OwnedName, reader::XmlEvent, ParserConfig,
+    attribute::Attribute, common::XmlVersion, name::OwnedName, namespace::Namespace,
+    reader::XmlEvent, ParserConfig,
 };
 
 use crate::{
@@ -132,6 +135,18 @@ impl XerElement {
     pub fn peek(&self) -> Option<&XmlEvent> {
         self.events.front()
     }
+
+    pub fn len(&self) -> usize {
+        self.events.len()
+    }
+}
+
+impl<I: IntoIterator<Item = XmlEvent>> From<I> for XerElement {
+    fn from(value: I) -> Self {
+        XerElement {
+            events: value.into_iter().collect(),
+        }
+    }
 }
 
 pub struct Decoder {
@@ -166,6 +181,10 @@ impl Decoder {
         } else {
             None
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.stack.iter().fold(0, |acc, evt| acc + evt.len())
     }
 
     pub fn peek(&self) -> Option<&XmlEvent> {
@@ -219,6 +238,15 @@ impl Decoder {
     fn into_list_decoder(mut self) -> Self {
         self.in_list = true;
         self
+    }
+
+    fn from_stack_elems<E: IntoIterator<Item = XmlEvent>, I: IntoIterator<Item = E>>(
+        elems: I,
+    ) -> Self {
+        Decoder {
+            stack: elems.into_iter().map(|i| XerElement::from(i)).collect(),
+            in_list: false,
+        }
     }
 }
 
@@ -840,13 +868,42 @@ fn decode_sequence_or_set_items<D: Decode>(
         })),
     }?;
 
-    let mut inner_decoder: Decoder = decoder
-        .stack
-        .pop()
-        .ok_or_else(|| error!(EndOfXmlInput))?
-        .events
-        .try_into()?;
-    inner_decoder = inner_decoder.into_list_decoder();
+    let mut inner_decoder: Decoder = if let Some(XmlEvent::Characters(c)) = decoder.peek() {
+        let mut elems = alloc::vec![alloc::vec![XmlEvent::EndElement {
+            name: identifier.clone()
+        }]];
+        elems.extend(c.split_ascii_whitespace().map(|item| {
+            alloc::vec![
+                XmlEvent::StartElement {
+                    name: OwnedName {
+                        local_name: D::IDENTIFIER.unwrap_or("dummy").to_string(),
+                        namespace: None,
+                        prefix: None,
+                    },
+                    attributes: alloc::vec::Vec::new(),
+                    namespace: Namespace::empty(),
+                },
+                XmlEvent::Characters(item.to_string()),
+                XmlEvent::EndElement {
+                    name: OwnedName {
+                        local_name: D::IDENTIFIER.unwrap_or("dummy").to_string(),
+                        namespace: None,
+                        prefix: None,
+                    },
+                },
+            ]
+        }));
+        let _ = decoder.stack.pop();
+        Decoder::from_stack_elems(elems)
+    } else {
+        decoder
+            .stack
+            .pop()
+            .ok_or_else(|| error!(EndOfXmlInput))?
+            .events
+            .try_into()?
+    }
+    .into_list_decoder();
 
     let mut items = alloc::vec::Vec::new();
     loop {
@@ -1355,6 +1412,54 @@ mod tests {
                 ])))
             },
             crate::xer::decode::<MAPEM>(encoded.as_bytes()).unwrap()
+        );
+    }
+
+    #[derive(AsnType, Debug, Clone, Decode, PartialEq)]
+    #[rasn(automatic_tags, crate_root = "crate")]
+    #[rasn(delegate, size("1..=8", extensible))]
+    pub struct ZoneIds(pub SequenceOf<Zid>);
+
+    #[derive(AsnType, Debug, Clone, Decode, PartialEq, PartialOrd, Eq, Ord, Hash)]
+    #[rasn(automatic_tags, crate_root = "crate")]
+    #[rasn(delegate, value("1..=32", extensible))]
+    pub struct Zid(pub Integer);
+
+    #[derive(AsnType, Debug, Clone, Decode, PartialEq)]
+    #[rasn(automatic_tags, crate_root = "crate")]
+    #[non_exhaustive]
+    pub struct GicPart {
+        #[rasn(identifier = "detectionZoneIds")]
+        pub detection_zone_ids: Option<ZoneIds>,
+        #[rasn(identifier = "relevanceZoneIds")]
+        pub relevance_zone_ids: Option<ZoneIds>,
+        pub direction: Option<u32>,
+    }
+
+    #[test]
+    fn simple_type_sequence_of() {
+        let mut encoded = r#"<ZoneIds>2 5</ZoneIds>"#;
+        assert_eq!(
+            ZoneIds(vec![Zid(2.into()), Zid(5.into())]),
+            crate::xer::decode::<ZoneIds>(encoded.as_bytes()).unwrap()
+        );
+        encoded = r#"<ZoneIds>2</ZoneIds>"#;
+        assert_eq!(
+            ZoneIds(vec![Zid(2.into())]),
+            crate::xer::decode::<ZoneIds>(encoded.as_bytes()).unwrap()
+        );
+        encoded = r#"<GicPart>
+                        <detectionZoneIds>2</detectionZoneIds>
+                        <relevanceZoneIds>1</relevanceZoneIds>
+                        <direction>0</direction>
+                    </GicPart>"#;
+        assert_eq!(
+            GicPart {
+                detection_zone_ids: Some(ZoneIds(alloc::vec![Zid(2.into())])),
+                relevance_zone_ids: Some(ZoneIds(alloc::vec![Zid(1.into())])),
+                direction: Some(0),
+            },
+            crate::xer::decode::<GicPart>(encoded.as_bytes()).unwrap()
         );
     }
 }

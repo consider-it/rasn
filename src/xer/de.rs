@@ -453,6 +453,7 @@ impl crate::Decoder for Decoder {
             })),
             None => Err(error!(EndOfXmlInput)),
         };
+        tag!(EndElement, self)?;
         value
     }
 
@@ -1098,8 +1099,10 @@ mod tests {
     fn enumerated() {
         let mut decoder = Decoder::new("<TestEnum><option-B/></TestEnum>".as_bytes()).unwrap();
         assert_eq!(TestEnum::decode(&mut decoder).unwrap(), TestEnum::OptionB);
+        assert_eq!(decoder.len(), 0);
         let mut decoder = Decoder::new("<TestEnum>option-B</TestEnum>".as_bytes()).unwrap();
         assert_eq!(TestEnum::decode(&mut decoder).unwrap(), TestEnum::OptionB);
+        assert_eq!(decoder.len(), 0);
     }
 
     #[derive(AsnType, Debug, Decode, PartialEq)]
